@@ -1,4 +1,4 @@
-import type { Versioned } from "./schema";
+import type { Versioned } from "../schema";
 
 /**
  * migrations[N] migrates a Versioned<unknown> from version N to N+1.
