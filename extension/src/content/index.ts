@@ -1,6 +1,3 @@
-// Content script — runs in the AI provider page. Owns DOM-bound services
-// (CaptureService, InjectionService) and exposes them via runtime messaging.
-
 import { buildContainer } from "@/core/composition";
 import { Tokens } from "@/core/tokens";
 import { CaptureService } from "@/services/capture/CaptureService";
@@ -11,10 +8,10 @@ import type { RuntimeMessage, RuntimeResponse } from "@/shared/messaging";
   const container = await buildContainer("content");
   const logger = container.resolve(Tokens.Logger);
   const registry = container.resolve(Tokens.ProviderRegistry);
-  const vault = container.resolve(Tokens.Vault);
+  const projects = container.resolve(Tokens.Projects);
   const flags = container.resolve(Tokens.Flags);
 
-  const capture = new CaptureService(registry, vault, flags);
+  const capture = new CaptureService(registry, projects, flags);
   const injection = new InjectionService(registry, flags);
 
   const adapter = registry.resolveByUrl(location.href);
@@ -25,27 +22,23 @@ import type { RuntimeMessage, RuntimeResponse } from "@/shared/messaging";
     (async () => {
       try {
         switch (msg.type) {
-          case "DETECT_ACTIVE_PROVIDER": {
-            reply({ ok: true, data: { providerId: adapter?.id ?? null } });
-            return;
-          }
+          case "DETECT_ACTIVE_PROVIDER":
+            return reply({ ok: true, data: { providerId: adapter?.id ?? null } });
           case "CAPTURE_ACTIVE_TAB": {
-            const r = await capture.captureAndSave(location.href);
+            const r = await capture.captureInto(msg.projectId, location.href);
             if (!r.ok) return reply({ ok: false, error: `${r.error.code}: ${r.error.message}` });
-            reply({ ok: true, data: { conversation: r.value } });
-            return;
+            return reply({ ok: true, data: { conversation: r.value } });
           }
           case "INJECT_INTO_ACTIVE_TAB": {
             const r = injection.inject(location.href, msg.text);
             if (!r.ok) return reply({ ok: false, error: `${r.error.code}: ${r.error.message}` });
-            reply({ ok: true, data: null });
-            return;
+            return reply({ ok: true, data: null });
           }
         }
       } catch (e) {
         reply({ ok: false, error: e instanceof Error ? e.message : String(e) });
       }
     })();
-    return true; // async
+    return true;
   });
 })();
