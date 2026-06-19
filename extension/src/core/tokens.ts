@@ -2,8 +2,8 @@ import { Token } from "./container";
 import type { Logger } from "./logger";
 import type { ProviderRegistry } from "@/providers/registry";
 import type { StorageGateway } from "@/storage/StorageGateway";
-import type { VaultService } from "@/services/vault/VaultService";
-import type { CompressionService } from "@/services/compression/CompressionService";
+import type { ProjectService } from "@/services/project/ProjectService";
+import type { ContinuityService } from "@/services/continuity/ContinuityService";
 import type { LicenseService } from "@/services/license/LicenseService";
 import type { FeatureFlagService } from "@/services/license/FeatureFlagService";
 import type { CaptureService } from "@/services/capture/CaptureService";
@@ -13,8 +13,8 @@ export const Tokens = {
   Logger: new Token<Logger>("Logger"),
   Storage: new Token<StorageGateway>("StorageGateway"),
   ProviderRegistry: new Token<ProviderRegistry>("ProviderRegistry"),
-  Vault: new Token<VaultService>("VaultService"),
-  Compression: new Token<CompressionService>("CompressionService"),
+  Projects: new Token<ProjectService>("ProjectService"),
+  Continuity: new Token<ContinuityService>("ContinuityService"),
   License: new Token<LicenseService>("LicenseService"),
   Flags: new Token<FeatureFlagService>("FeatureFlagService"),
   Capture: new Token<CaptureService>("CaptureService"),

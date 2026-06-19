@@ -3,16 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ContextPassport AI — Settings</title>
+    <title>ContextPassport AI — Manage</title>
     <link rel="stylesheet" href="tokens.css" />
   </head>
   <body class="cp-options">
     <main class="cp-container">
-      <h1>ContextPassport — Settings</h1>
+      <h1>ContextPassport — Projects & Passport</h1>
 
       <section>
         <h2>Plan</h2>
         <p id="cp-plan" class="cp-muted"></p>
+      </section>
+
+      <section>
+        <h2>Projects</h2>
+        <ul id="cp-projects" class="cp-list"></ul>
+      </section>
+
+      <section>
+        <h2 id="cp-passport-heading">Passport</h2>
+        <div id="cp-passport"></div>
       </section>
 
       <section>
@@ -21,17 +31,11 @@
       </section>
 
       <section>
-        <h2>Vault</h2>
-        <p id="cp-vault-count" class="cp-muted"></p>
-        <button id="cp-vault-clear" class="cp-btn">Clear vault</button>
-      </section>
-
-      <section>
         <h2>About</h2>
         <p class="cp-muted">
-          Local-only. No data leaves your browser. See
-          <code>docs/ARCHITECTURE.md</code>, <code>docs/STORAGE_SCHEMA.md</code>, and
-          <code>docs/UPDATE_STRATEGY.md</code> for design details.
+          AI Work Continuity. Local-only. See <code>docs/ARCHITECTURE.md</code>,
+          <code>docs/STORAGE_SCHEMA.md</code>, <code>docs/UPDATE_STRATEGY.md</code>,
+          <code>docs/CODE_PROTECTION.md</code>.
         </p>
       </section>
     </main>

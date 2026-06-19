@@ -4,18 +4,18 @@
 export type FeatureId =
   | "capture"
   | "inject"
-  | "vault-unlimited"
+  | "projects-unlimited"
   | "export"
-  | `compression:${string}`;
+  | `continuity:${string}`;
 
 export interface PricingPlan {
   id: "free" | "pro" | "team";
   label: string;
   monthlyPriceUsd: number;
   features: readonly FeatureId[];
-  /** Soft caps. 0 means unlimited. */
   limits: {
-    vaultMaxItems: number;
+    projectsMax: number;       // 0 = unlimited
+    capturesPerProject: number; // 0 = unlimited (enforced elsewhere)
   };
 }
 
@@ -27,43 +27,43 @@ export const PLANS: readonly PricingPlan[] = [
     features: [
       "capture",
       "inject",
-      "compression:none",
-      "compression:dedupe",
-      "compression:summarize-heuristic",
+      "continuity:brief",
+      "continuity:essential",
+      "continuity:full",
     ],
-    limits: { vaultMaxItems: 50 },
+    limits: { projectsMax: 3, capturesPerProject: 20 },
   },
   {
     id: "pro",
     label: "Pro",
-    monthlyPriceUsd: 5,
+    monthlyPriceUsd: 6,
     features: [
       "capture",
       "inject",
-      "compression:none",
-      "compression:dedupe",
-      "compression:summarize-heuristic",
-      "compression:aggressive",
-      "vault-unlimited",
+      "continuity:brief",
+      "continuity:essential",
+      "continuity:full",
+      "continuity:handoff",
+      "projects-unlimited",
       "export",
     ],
-    limits: { vaultMaxItems: 0 },
+    limits: { projectsMax: 0, capturesPerProject: 0 },
   },
   {
     id: "team",
     label: "Team",
-    monthlyPriceUsd: 12,
+    monthlyPriceUsd: 14,
     features: [
       "capture",
       "inject",
-      "compression:none",
-      "compression:dedupe",
-      "compression:summarize-heuristic",
-      "compression:aggressive",
-      "vault-unlimited",
+      "continuity:brief",
+      "continuity:essential",
+      "continuity:full",
+      "continuity:handoff",
+      "projects-unlimited",
       "export",
     ],
-    limits: { vaultMaxItems: 0 },
+    limits: { projectsMax: 0, capturesPerProject: 0 },
   },
 ];
 

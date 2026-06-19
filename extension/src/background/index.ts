@@ -1,9 +1,10 @@
 import { buildContainer } from "@/core/composition";
 import { Tokens } from "@/core/tokens";
-import { CURRENT_VERSION } from "@/storage/schema";
+import { CURRENT_VERSION, legacyConversationSchema, type LegacyConversation } from "@/storage/schema";
+import { importLegacyConversations } from "@/storage/migrations";
 
-// Background service worker — owns long-lived state, runs migrations, and is
-// the only place that triggers update-time work.
+// Background service worker. Owns install/update hooks. Performs the one-shot
+// import of v1 conversations into the new v2 projects model.
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   const container = await buildContainer("background");
@@ -11,19 +12,37 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   const storage = container.resolve(Tokens.Storage);
   logger.info(`onInstalled: ${details.reason}`);
 
-  // Ensure schema version is recorded. StorageGateway handles per-key migration
-  // on read; this entry is the human-readable global marker.
+  // One-shot legacy import: read raw vault:conversations (if present from v1)
+  // and seed a "Legacy import" project. Idempotent: we only run if `projects`
+  // is empty.
+  try {
+    const raw = await chrome.storage.local.get(["vault:conversations", "projects"]);
+    const currentProjects = (raw["projects"] as { data?: unknown } | undefined)?.data;
+    const legacyWrapper = raw["vault:conversations"] as { data?: unknown } | undefined;
+    if (
+      (!Array.isArray(currentProjects) || currentProjects.length === 0) &&
+      legacyWrapper?.data && Array.isArray(legacyWrapper.data)
+    ) {
+      const parsed = legacyWrapper.data
+        .map((c: unknown) => legacyConversationSchema.safeParse(c))
+        .filter((r): r is { success: true; data: LegacyConversation } => r.success)
+        .map((r) => r.data);
+      if (parsed.length > 0) {
+        const seed = importLegacyConversations(parsed, Date.now());
+        await storage.write("projects", seed as never);
+        logger.info(`Imported ${parsed.length} legacy conversation(s) into a project.`);
+      }
+    }
+  } catch (e) {
+    logger.error("Legacy import failed", e);
+  }
+
   const v = await storage.read("meta:schemaVersion");
-  if (!v.ok || !v.value) {
-    await storage.write("meta:schemaVersion", { version: CURRENT_VERSION });
-  } else if (v.value.version !== CURRENT_VERSION) {
-    logger.info(`Storage version changing ${v.value.version} -> ${CURRENT_VERSION}`);
+  if (!v.ok || !v.value || v.value.version !== CURRENT_VERSION) {
     await storage.write("meta:schemaVersion", { version: CURRENT_VERSION });
   }
 });
 
-// Open options page from the action menu (right-click on extension icon
-// gives "Options" by default; this is a convenience for keyboard users).
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "OPEN_OPTIONS") {
     chrome.runtime.openOptionsPage();

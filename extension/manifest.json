@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "ContextPassport AI",
-  "version": "0.1.0",
-  "description": "Capture conversations from ChatGPT, Claude, and Gemini, compress them locally, and inject into any AI chat.",
+  "version": "0.2.0",
+  "description": "AI Work Continuity. Move between ChatGPT, Claude, Gemini, and Perplexity without rebuilding project context.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://claude.ai/*",
-    "https://gemini.google.com/*"
+    "https://gemini.google.com/*",
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -25,7 +27,9 @@
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
         "https://claude.ai/*",
-        "https://gemini.google.com/*"
+        "https://gemini.google.com/*",
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

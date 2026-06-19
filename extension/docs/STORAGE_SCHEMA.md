@@ -2,62 +2,109 @@
 
 All persistent data lives in `chrome.storage.local`, accessed exclusively via `StorageGateway`. Every value is wrapped as `{ __v: number, data: T }` where `__v` is the schema version it was written with.
 
-Current version: **1**.
+Current version: **2**.
 
 ## Namespaces (keys)
 
-| Key                     | Shape                                           | Purpose                                         |
-|-------------------------|-------------------------------------------------|-------------------------------------------------|
-| `vault:conversations`   | `Conversation[]`                                | Captured conversations (newest first, capped 500). |
-| `vault:index`           | `{ byId: Record<id, { title, providerId, capturedAt }> }` | Reserved for fast search; not populated in v1.     |
-| `settings:user`         | `{ defaultCompressionMode, autoCaptureOnSubmit, theme }` | User preferences.                            |
-| `flags:overrides`       | `Record<string, boolean>`                       | User-set feature-flag overrides.                |
-| `meta:schemaVersion`    | `{ version: number }`                           | Human-readable global schema marker.            |
-| `quarantine:<key>:<ts>` | `{ reason, raw }`                               | Auto-created when validation fails on read.     |
+| Key                     | Shape                                                | Purpose                                          |
+|-------------------------|------------------------------------------------------|--------------------------------------------------|
+| `projects`              | `Project[]`                                          | Projects with embedded passport + captures.      |
+| `settings:user`         | `{ activeProjectId, defaultRenderMode, theme }`      | User preferences.                                |
+| `flags:overrides`       | `Record<string, boolean>`                            | User-set feature-flag overrides.                 |
+| `meta:schemaVersion`    | `{ version: number }`                                | Human-readable global schema marker.             |
+| `quarantine:<key>:<ts>` | `{ reason, raw }`                                    | Auto-created when validation fails on read.      |
+| `vault:conversations`   | *(legacy v1)*                                        | Read once on update, imported into a project; can be removed afterward. |
 
-### `Conversation`
+### `Project`
 
 ```ts
 {
-  id: string;            // crypto.randomUUID()
-  providerId: string;    // "chatgpt" | "claude" | "gemini" | future
-  url: string;
-  title: string;
-  turns: Array<{ role: "user" | "assistant" | "system"; text: string }>;
-  capturedAt: number;    // ms epoch
-  tags: string[];        // default []
+  id: string;                  // crypto.randomUUID()
+  name: string;
+  description: string;
+  createdAt: number;
+  updatedAt: number;
+  passport: ContextPassport;
+  captures: Capture[];         // capped at 50 newest
 }
 ```
 
+### `ContextPassport`
+
+```ts
+{
+  goals:         FacetItem[];
+  decisions:     FacetItem[];
+  constraints:   FacetItem[];
+  progress:      FacetItem[];
+  openQuestions: FacetItem[];
+  nextActions:   FacetItem[];
+}
+```
+
+Each array is capped at 30 items. Pinned items are kept first; remaining slots go to highest-confidence items. Dismissed items are kept (so they don't reappear on re-merge) but excluded from rendering.
+
+### `FacetItem`
+
+```ts
+{
+  id: string;
+  kind: "goal" | "decision" | "constraint" | "progress" | "openQuestion" | "nextAction";
+  text: string;
+  source: {
+    captureId: string;       // "manual" for user-added items
+    providerId: string;
+    role: "user" | "assistant" | "system";
+    capturedAt: number;
+  };
+  confidence: number;        // 0..1, heuristic; manual items = 1.0
+  pinned: boolean;           // survives caps and merges
+  dismissed: boolean;        // never reappears in rendering
+}
+```
+
+### `Capture`
+
+```ts
+{
+  id: string;
+  providerId: string;        // "chatgpt" | "claude" | "gemini" | "perplexity" | ...
+  url: string;
+  title: string;
+  turns: Array<{ role, text }>;
+  capturedAt: number;
+}
+```
+
+Captures are kept so a future improved extractor can re-derive facets without re-capturing. They are not surfaced as the primary artifact.
+
 ## Quotas
 
-`chrome.storage.local` allows ~10 MB per extension by default (more with `unlimitedStorage`). The vault is capped at 500 items in `VaultService.save()` as a soft guard; pro tier should call a future `pruneToLimit(unlimited)` path. Per-item size is not capped — a single very long conversation can exceed quota. A future migration will introduce per-turn chunking; today the failure is surfaced as `STORAGE_WRITE` and shown in the popup.
+`chrome.storage.local` allows ~10 MB per extension by default. The 30-item-per-facet cap and 50-captures-per-project cap keep a single project bounded. If a project still exceeds quota, the write returns a `STORAGE_WRITE` error surfaced in the popup. A future migration may chunk captures into per-key blobs.
 
 ## Versioning & Migrations
 
-- The current version is `CURRENT_VERSION` in `src/storage/schema.ts`.
+- `CURRENT_VERSION = 2` in `src/storage/schema.ts`.
 - Each write tags data with `CURRENT_VERSION`.
-- Each read runs `migrations[fromVersion]` repeatedly until the value reaches `CURRENT_VERSION`. Migrations are **forward-only** and pure functions: `(key, Versioned<unknown>) → Versioned<unknown>`.
-- When you bump the version, add the new migration to `src/storage/migrations/index.ts`. Never modify an existing migration; treat them as append-only history.
-- Schemas live in `src/storage/schema.ts` and are validated with zod on **both** read and write. Invalid data is moved to `quarantine:*` rather than dropped, so users can recover or report it.
+- Each read runs `migrations[fromVersion]` repeatedly until the value reaches `CURRENT_VERSION`. Migrations are **forward-only** and pure: `(key, Versioned<unknown>) → Versioned<unknown>`.
+- Bumping the version requires a new entry in `src/storage/migrations/index.ts`. Never modify an existing one — treat them as append-only history.
+- Schemas live in `src/storage/schema.ts` and are validated with zod on **both** read and write. Invalid data is moved to `quarantine:*`, never dropped.
 
-### Adding a new namespace
+### v1 → v2 (this release)
 
-1. Add the key + zod schema to `schemas` in `src/storage/schema.ts`.
-2. The `NamespaceKey`/`DataMap` types update automatically.
-3. Use `gateway.read(key)` / `gateway.write(key, data)` — the gateway will refuse anything not in the schema map.
+The v1 model was a flat `vault:conversations` list. The v2 model is `projects[]`. On update:
 
-### Bumping the version
+1. `background/index.ts` reads the raw `vault:conversations` key.
+2. Each conversation is parsed against the legacy schema (`legacyConversationSchema`).
+3. They are wrapped into a single "Legacy import" project (empty passport, captures preserved).
+4. The new value is written to `projects`. The legacy key is left alone (a future patch will offer a one-click clear in options).
+5. `settings:user` is migrated by `migrations[1]`: `defaultCompressionMode` becomes `defaultRenderMode`; theme is preserved.
 
-1. Increment `CURRENT_VERSION`.
-2. Update the zod schema for any affected namespace.
-3. Add a migration entry: `migrations[OLD_VERSION] = (key, v) => ({ __v: OLD_VERSION + 1, data: transform(v.data) })`.
-4. Add a round-trip test in `extension/tests/storage.test.ts`.
+The import is idempotent: it runs only when `projects` is empty.
 
 ## Privacy
 
-All data stays in `chrome.storage.local`. The extension makes **zero network requests**. There is no telemetry, no remote sync, and no third-party SDK. If a future version adds sync, it must:
-
+All data stays in `chrome.storage.local`. The extension makes **zero network requests**. There is no telemetry, no remote sync, no third-party SDK. If a future version adds sync, it must:
 - be opt-in via `settings:user`,
 - write through `StorageGateway` (no direct `chrome.storage` calls),
 - and document the new network surface in this file.

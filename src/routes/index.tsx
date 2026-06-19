@@ -4,21 +4,30 @@ import { useState } from "react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ContextPassport AI — carry context between ChatGPT, Claude, and Gemini" },
+      { title: "ContextPassport AI — work continuity across ChatGPT, Claude, Gemini, Perplexity" },
       {
         name: "description",
         content:
-          "Local-first Chrome extension that captures conversations from one AI, compresses them, and injects them into another. No accounts, no cloud, no API keys.",
+          "Move between AI systems without rebuilding context. ContextPassport captures the goals, decisions, constraints, progress, open questions, and next actions of a project — and re-establishes them in any AI tab. Local-only Chrome extension.",
       },
-      { property: "og:title", content: "ContextPassport AI" },
+      { property: "og:title", content: "ContextPassport AI — AI Work Continuity" },
       {
         property: "og:description",
-        content: "Carry context between ChatGPT, Claude, and Gemini. Local-only Chrome extension.",
+        content: "Carry project context across ChatGPT, Claude, Gemini, and Perplexity. Local-only Chrome extension.",
       },
     ],
   }),
   component: Index,
 });
+
+const FACETS = [
+  { label: "Goals", body: "What you're trying to accomplish." },
+  { label: "Decisions", body: "Architectural and design choices you've already made." },
+  { label: "Constraints", body: "Hard limits — must / must-not." },
+  { label: "Progress", body: "What's done so you don't redo it." },
+  { label: "Open Questions", body: "What's unresolved." },
+  { label: "Next Actions", body: "The concrete next steps." },
+];
 
 function Index() {
   const [status, setStatus] = useState<string>("");
@@ -46,14 +55,12 @@ function Index() {
       <main className="mx-auto max-w-2xl px-6 py-16">
         <header className="mb-12">
           <p className="mb-3 text-xs uppercase tracking-[0.2em] text-[#8a93a0]">
-            Chrome extension · Local-only
+            AI Work Continuity · Chrome extension · Local-only
           </p>
-          <h1 className="mb-4 text-4xl font-semibold leading-tight">
-            ContextPassport AI
-          </h1>
+          <h1 className="mb-4 text-4xl font-semibold leading-tight">ContextPassport AI</h1>
           <p className="text-lg text-[#b6bcc6]">
-            Capture a conversation from ChatGPT, Claude, or Gemini. Compress it locally.
-            Inject it into a different AI — without copy-pasting or sending your data anywhere.
+            Move between ChatGPT, Claude, Gemini, and Perplexity without rebuilding project context.
+            Stop re-explaining goals. Stop losing decisions to a closed tab. Stop starting over.
           </p>
         </header>
 
@@ -68,42 +75,63 @@ function Index() {
         </section>
 
         <section className="mb-12">
+          <h2 className="mb-4 text-xl font-semibold">What it preserves</h2>
+          <p className="mb-4 text-[#b6bcc6]">
+            Not conversation transcripts. The six things you actually need to keep working:
+          </p>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {FACETS.map((f) => (
+              <li
+                key={f.label}
+                className="rounded-md border border-[#24292f] bg-[#15181d] p-4"
+              >
+                <p className="text-sm font-medium">{f.label}</p>
+                <p className="mt-1 text-sm text-[#8a93a0]">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-xl font-semibold">How it works</h2>
+          <ol className="space-y-3 text-[#b6bcc6]">
+            <li>
+              <strong className="text-[#e7eaee]">1. Capture.</strong> One click on any supported AI page extracts the visible conversation and merges six structured facets into your active project's passport.
+            </li>
+            <li>
+              <strong className="text-[#e7eaee]">2. Curate (optional).</strong> Open the manager to pin items you don't want lost, dismiss false positives, or add facts manually.
+            </li>
+            <li>
+              <strong className="text-[#e7eaee]">3. Render & inject.</strong> Switch to a different AI. Pick a continuity mode (Brief / Essential / Full / Pro Handoff). The passport becomes a prompt; one click drops it into the composer.
+            </li>
+          </ol>
+        </section>
+
+        <section className="mb-12">
           <h2 className="mb-4 text-xl font-semibold">Install in Chrome</h2>
           <ol className="space-y-2 text-[#b6bcc6]">
             <li>1. Unzip the downloaded file.</li>
-            <li>
-              2. Open <code className="rounded bg-[#15181d] px-1.5 py-0.5 text-sm">chrome://extensions</code> in Chrome (or any Chromium browser).
-            </li>
+            <li>2. Open <code className="rounded bg-[#15181d] px-1.5 py-0.5 text-sm">chrome://extensions</code> in Chrome (or any Chromium browser).</li>
             <li>3. Enable <strong>Developer mode</strong> (top-right toggle).</li>
             <li>4. Click <strong>Load unpacked</strong> and select the unzipped folder.</li>
           </ol>
         </section>
 
         <section className="mb-12">
-          <h2 className="mb-4 text-xl font-semibold">What it does</h2>
-          <ul className="space-y-3 text-[#b6bcc6]">
-            <li>· Captures the visible conversation from ChatGPT, Claude, or Gemini.</li>
-            <li>· Stores it in a versioned local vault (chrome.storage, never the cloud).</li>
-            <li>· Compresses with four local modes: none, dedupe, summarize, aggressive.</li>
-            <li>· Injects the result into the composer of whichever AI tab is active.</li>
-          </ul>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="mb-4 text-xl font-semibold">Built for maintainability</h2>
+          <h2 className="mb-4 text-xl font-semibold">Built for continuity, not flash</h2>
           <p className="mb-3 text-[#b6bcc6]">
             Strict TypeScript, feature-based folders, DI container, provider adapter contract,
-            pluggable compression strategy registry, versioned storage with forward-only migrations,
-            and a license/feature-flag layer so pricing changes never touch feature code.
+            pluggable facet extractor and render-strategy registries, versioned storage with
+            forward-only migrations, license + feature-flag layer. Reliability over feature count.
           </p>
           <p className="text-sm text-[#8a93a0]">
             See <code>extension/docs/ARCHITECTURE.md</code>, <code>STORAGE_SCHEMA.md</code>,
-            and <code>UPDATE_STRATEGY.md</code>.
+            <code>UPDATE_STRATEGY.md</code>, <code>CODE_PROTECTION.md</code>.
           </p>
         </section>
 
         <footer className="border-t border-[#24292f] pt-6 text-sm text-[#8a93a0]">
-          v0.1.0 · Manifest V3 · No backend · No telemetry
+          v0.2.0 · Manifest V3 · No backend · No telemetry · ChatGPT · Claude · Gemini · Perplexity
         </footer>
       </main>
     </div>

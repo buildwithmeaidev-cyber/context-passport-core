@@ -1,17 +1,13 @@
 import type { ProviderRegistry } from "@/providers/registry";
-import type { VaultService } from "@/services/vault/VaultService";
+import type { ProjectService } from "@/services/project/ProjectService";
 import type { FeatureFlagService } from "@/services/license/FeatureFlagService";
 import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 
-/**
- * CaptureService — must run inside the content-script runtime (needs DOM).
- * In background/popup, use messaging.sendToActiveTab() instead.
- */
 export class CaptureService {
   constructor(
     private readonly registry: ProviderRegistry,
-    private readonly vault: VaultService,
+    private readonly projects: ProjectService,
     private readonly flags: FeatureFlagService,
   ) {}
 
@@ -23,21 +19,20 @@ export class CaptureService {
     }
     const extracted = adapter.extractConversation();
     if (!extracted.ok) return err(extracted.error);
-    const captured: CapturedConversation = {
+    return ok({
       providerId: adapter.id,
       url,
       title: extracted.value.title,
       turns: extracted.value.turns,
       capturedAt: Date.now(),
-    };
-    return ok(captured);
+    });
   }
 
-  async captureAndSave(url: string): Promise<Result<CapturedConversation>> {
+  async captureInto(projectId: string, url: string): Promise<Result<CapturedConversation>> {
     const c = this.capture(url);
     if (!c.ok) return c;
-    const saved = await this.vault.save(c.value);
-    if (!saved.ok) return err(saved.error);
+    const ingest = await this.projects.ingestCapture(projectId, c.value);
+    if (!ingest.ok) return err(ingest.error);
     return ok(c.value);
   }
 }

@@ -9,6 +9,7 @@ describe("ProviderRegistry contract", () => {
     ["https://chat.openai.com/c/abc", "chatgpt"],
     ["https://claude.ai/chat/abc", "claude"],
     ["https://gemini.google.com/app", "gemini"],
+    ["https://www.perplexity.ai/search/abc", "perplexity"],
     ["https://example.com/", undefined],
   ])("resolves %s -> %s", (url, expected) => {
     const a = registry.resolveByUrl(url);

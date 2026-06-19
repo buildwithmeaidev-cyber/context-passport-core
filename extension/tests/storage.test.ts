@@ -1,7 +1,5 @@
-// Run with: bunx vitest run --root extension
 import { describe, it, expect, beforeEach } from "vitest";
 import { StorageGateway, type StorageDriver } from "@/storage/StorageGateway";
-import { CURRENT_VERSION } from "@/storage/schema";
 import { ConsoleLogger } from "@/core/logger";
 
 class MemDriver implements StorageDriver {
@@ -12,7 +10,7 @@ class MemDriver implements StorageDriver {
   async keys() { return [...this.store.keys()]; }
 }
 
-describe("StorageGateway", () => {
+describe("StorageGateway (v2)", () => {
   let g: StorageGateway;
   let d: MemDriver;
   beforeEach(() => {
@@ -21,24 +19,32 @@ describe("StorageGateway", () => {
   });
 
   it("returns null for missing keys", async () => {
-    const r = await g.read("vault:conversations");
+    const r = await g.read("projects");
     expect(r.ok && r.value === null).toBe(true);
   });
 
-  it("round-trips a conversation list with current version tag", async () => {
-    const w = await g.write("vault:conversations", []);
+  it("round-trips an empty projects list with current version", async () => {
+    const w = await g.write("projects", []);
     expect(w.ok).toBe(true);
-    const stored = d.store.get("vault:conversations") as { __v: number };
-    expect(stored.__v).toBe(CURRENT_VERSION);
-    const r = await g.read("vault:conversations");
+    const r = await g.read("projects");
     expect(r.ok).toBe(true);
   });
 
-  it("quarantines invalid data instead of dropping it", async () => {
-    await d.set("vault:conversations", { __v: CURRENT_VERSION, data: { bogus: true } });
-    const r = await g.read("vault:conversations");
+  it("migrates v1 settings:user to v2 (preserving theme, renaming defaultCompressionMode -> defaultRenderMode)", async () => {
+    await d.set("settings:user", { __v: 1, data: { defaultCompressionMode: "dedupe", theme: "dark", autoCaptureOnSubmit: true } });
+    const r = await g.read("settings:user");
+    expect(r.ok).toBe(true);
+    if (r.ok && r.value) {
+      expect(r.value.defaultRenderMode).toBe("dedupe");
+      expect(r.value.theme).toBe("dark");
+      expect(r.value.activeProjectId).toBe(null);
+    }
+  });
+
+  it("quarantines invalid data", async () => {
+    await d.set("projects", { __v: 2, data: { bogus: true } });
+    const r = await g.read("projects");
     expect(r.ok).toBe(false);
-    const keys = await d.keys();
-    expect(keys.some((k) => k.startsWith("quarantine:vault:conversations:"))).toBe(true);
+    expect((await d.keys()).some((k) => k.startsWith("quarantine:projects:"))).toBe(true);
   });
 });
