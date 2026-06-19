@@ -1,0 +1,186 @@
+import type { StorageGateway } from "@/storage/StorageGateway";
+import type { Project, Capture, StoredFacetItem } from "@/storage/schema";
+import type { ContextPassport, FacetItem, FacetKind } from "@/core/passport";
+import { EMPTY_PASSPORT, FACET_TO_FIELD } from "@/core/passport";
+import { extractFacets } from "@/core/extractFacets";
+import type { CapturedConversation } from "@/core/tokens";
+import { type Result, ok, err, appError } from "@/core/result";
+
+const MAX_CAPTURES_PER_PROJECT = 50;
+
+/**
+ * ProjectService — CRUD for projects + the merge logic that turns captures
+ * into passport facets. UI never builds passports itself; it asks this service.
+ */
+export class ProjectService {
+  constructor(private readonly storage: StorageGateway) {}
+
+  async list(): Promise<Project[]> {
+    const r = await this.storage.read("projects");
+    return r.ok && r.value ? r.value : [];
+  }
+
+  async get(id: string): Promise<Project | undefined> {
+    return (await this.list()).find((p) => p.id === id);
+  }
+
+  async create(name: string, description = ""): Promise<Result<Project>> {
+    const now = Date.now();
+    const project: Project = {
+      id: crypto.randomUUID(),
+      name: name.trim() || "Untitled project",
+      description,
+      createdAt: now,
+      updatedAt: now,
+      passport: EMPTY_PASSPORT,
+      captures: [],
+    };
+    const next = [project, ...(await this.list())];
+    const w = await this.storage.write("projects", next);
+    if (!w.ok) return err(w.error);
+    return ok(project);
+  }
+
+  async rename(id: string, name: string): Promise<Result<true>> {
+    return this.mutate(id, (p) => ({ ...p, name: name.trim() || p.name, updatedAt: Date.now() }));
+  }
+
+  async remove(id: string): Promise<Result<true>> {
+    const next = (await this.list()).filter((p) => p.id !== id);
+    const w = await this.storage.write("projects", next);
+    return w.ok ? ok(true) : err(w.error);
+  }
+
+  /**
+   * Append a capture to a project AND merge its extracted facets into the
+   * project's passport. This is the central continuity operation.
+   */
+  async ingestCapture(projectId: string, captured: CapturedConversation): Promise<Result<Project>> {
+    const project = await this.get(projectId);
+    if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
+
+    const capture: Capture = {
+      id: crypto.randomUUID(),
+      providerId: captured.providerId,
+      url: captured.url,
+      title: captured.title,
+      turns: captured.turns,
+      capturedAt: captured.capturedAt,
+    };
+
+    const facets = extractFacets(captured.turns, {
+      captureId: capture.id,
+      providerId: captured.providerId,
+      capturedAt: captured.capturedAt,
+    });
+
+    const merged = mergePassport(project.passport as ContextPassport, facets);
+    const captures = [capture, ...project.captures].slice(0, MAX_CAPTURES_PER_PROJECT);
+
+    const next: Project = {
+      ...project,
+      passport: merged as Project["passport"],
+      captures,
+      updatedAt: Date.now(),
+    };
+    const w = await this.replace(next);
+    if (!w.ok) return err(w.error);
+    return ok(next);
+  }
+
+  async pinFacet(projectId: string, facetId: string, pinned: boolean): Promise<Result<true>> {
+    return this.mapFacet(projectId, facetId, (f) => ({ ...f, pinned }));
+  }
+  async dismissFacet(projectId: string, facetId: string): Promise<Result<true>> {
+    return this.mapFacet(projectId, facetId, (f) => ({ ...f, dismissed: true }));
+  }
+  async editFacet(projectId: string, facetId: string, text: string): Promise<Result<true>> {
+    return this.mapFacet(projectId, facetId, (f) => ({ ...f, text, pinned: true }));
+  }
+  async addManualFacet(projectId: string, kind: FacetKind, text: string): Promise<Result<true>> {
+    const project = await this.get(projectId);
+    if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
+    const item: StoredFacetItem = {
+      id: crypto.randomUUID(),
+      kind,
+      text,
+      source: { captureId: "manual", providerId: "manual", role: "user", capturedAt: Date.now() },
+      confidence: 1,
+      pinned: true,
+      dismissed: false,
+    };
+    const field = FACET_TO_FIELD[kind];
+    const passport = { ...project.passport, [field]: [...project.passport[field], item] } as Project["passport"];
+    return (await this.replace({ ...project, passport, updatedAt: Date.now() })).ok ? ok(true) : err(appError("STORAGE_WRITE", "addManualFacet"));
+  }
+
+  private async mapFacet(
+    projectId: string,
+    facetId: string,
+    fn: (f: StoredFacetItem) => StoredFacetItem,
+  ): Promise<Result<true>> {
+    return this.mutate(projectId, (p) => {
+      const passport = { ...p.passport };
+      for (const field of Object.values(FACET_TO_FIELD)) {
+        passport[field] = passport[field].map((f) => (f.id === facetId ? fn(f) : f));
+      }
+      return { ...p, passport, updatedAt: Date.now() };
+    });
+  }
+
+  private async mutate(id: string, fn: (p: Project) => Project): Promise<Result<true>> {
+    const all = await this.list();
+    const idx = all.findIndex((p) => p.id === id);
+    if (idx === -1) return err(appError("VALIDATION", `Project ${id} not found`));
+    const next = [...all];
+    next[idx] = fn(all[idx]!);
+    const w = await this.storage.write("projects", next);
+    return w.ok ? ok(true) : err(w.error);
+  }
+
+  private async replace(p: Project): Promise<Result<true>> {
+    return this.mutate(p.id, () => p);
+  }
+}
+
+/** Merge new facets into existing passport, deduping by normalized text per kind. */
+function mergePassport(existing: ContextPassport, incoming: FacetItem[]): ContextPassport {
+  const next: ContextPassport = {
+    goals: [...existing.goals],
+    decisions: [...existing.decisions],
+    constraints: [...existing.constraints],
+    progress: [...existing.progress],
+    openQuestions: [...existing.openQuestions],
+    nextActions: [...existing.nextActions],
+  };
+  for (const item of incoming) {
+    const field = FACET_TO_FIELD[item.kind];
+    const norm = normalize(item.text);
+    const dup = next[field].find((x) => normalize(x.text) === norm);
+    if (dup) {
+      // Boost confidence on repeat observation; keep oldest source/pin state.
+      dup.confidence = Math.min(1, dup.confidence + 0.1);
+      continue;
+    }
+    next[field].push(item);
+  }
+  // Cap per-facet length to keep storage bounded; drop lowest-confidence non-pinned.
+  for (const field of Object.values(FACET_TO_FIELD)) {
+    next[field] = capFacet(next[field], 30);
+  }
+  return next;
+}
+
+function capFacet(items: FacetItem[], max: number): FacetItem[] {
+  if (items.length <= max) return items;
+  const pinned = items.filter((i) => i.pinned);
+  const rest = items
+    .filter((i) => !i.pinned)
+    .sort((a, b) => b.confidence - a.confidence || b.source.capturedAt - a.source.capturedAt)
+    .slice(0, Math.max(0, max - pinned.length));
+  return [...pinned, ...rest];
+}
+
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\w\s]/g, "").trim();
+}
