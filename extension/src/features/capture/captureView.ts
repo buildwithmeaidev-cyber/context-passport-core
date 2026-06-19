@@ -1,23 +1,26 @@
-// Feature slice: capture view bindings. NO business logic — orchestrates a
-// service call and updates DOM only.
-
-import type { CapturedConversation } from "@/core/tokens";
+// Feature slice: capture view. UI-only — delegates to messaging.
 
 export interface CaptureViewDeps {
   button: HTMLButtonElement;
   status: HTMLParagraphElement;
-  onCapture: () => Promise<CapturedConversation>;
-  refreshSources: () => Promise<void>;
+  getProjectId: () => string | null;
+  onCapture: (projectId: string) => Promise<unknown>;
+  afterCapture: () => Promise<void>;
 }
 
 export function renderCapture(deps: CaptureViewDeps): void {
   deps.button.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId) {
+      deps.status.textContent = "Pick or create a project first.";
+      return;
+    }
     deps.button.disabled = true;
-    deps.status.textContent = "Capturing…";
+    deps.status.textContent = "Capturing and extracting facets…";
     try {
-      const c = await deps.onCapture();
-      deps.status.textContent = `Saved “${c.title}” (${c.turns.length} turns).`;
-      await deps.refreshSources();
+      await deps.onCapture(projectId);
+      await deps.afterCapture();
+      deps.status.textContent = "Captured. Passport updated.";
     } catch (e) {
       deps.status.textContent = `Failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {

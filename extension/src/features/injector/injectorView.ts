@@ -1,47 +1,51 @@
-// Feature slice: injector view. Composes CompressionService + VaultService
-// + messaging. UI-only; no business rules live here.
+// Feature slice: injector view. Renders a project's passport via a chosen
+// continuity strategy and injects it into the current tab's composer.
 
-import type { CompressionService } from "@/services/compression/CompressionService";
-import type { VaultService } from "@/services/vault/VaultService";
+import type { ProjectService } from "@/services/project/ProjectService";
+import type { ContinuityService } from "@/services/continuity/ContinuityService";
 
 export interface InjectorViewDeps {
   modeSelect: HTMLSelectElement;
-  sourceSelect: HTMLSelectElement;
+  modeDesc: HTMLParagraphElement;
   button: HTMLButtonElement;
   status: HTMLParagraphElement;
-  vault: VaultService;
-  compression: CompressionService;
+  projects: ProjectService;
+  continuity: ContinuityService;
+  getProjectId: () => string | null;
+  getTargetProvider: () => string | null;
   inject: (text: string) => Promise<unknown>;
 }
 
 export async function renderInjector(deps: InjectorViewDeps): Promise<void> {
-  // Populate modes
-  const modes = deps.compression.listForUi();
+  const modes = deps.continuity.listForUi();
   deps.modeSelect.innerHTML = modes
     .map((m) => `<option value="${m.id}" ${m.available ? "" : "disabled"}>${m.label}${m.premium ? " (Pro)" : ""}</option>`)
     .join("");
-  // Populate sources
-  const items = await deps.vault.list();
-  deps.sourceSelect.innerHTML = items
-    .map((c) => `<option value="${c.id}">${escapeHtml(c.title)} · ${c.providerId}</option>`)
-    .join("");
+  const updateDesc = () => {
+    const m = modes.find((x) => x.id === deps.modeSelect.value);
+    deps.modeDesc.textContent = m?.description ?? "";
+  };
+  deps.modeSelect.addEventListener("change", updateDesc);
+  updateDesc();
 
   deps.button.addEventListener("click", async () => {
-    const sourceId = deps.sourceSelect.value;
-    const modeId = deps.modeSelect.value;
-    if (!sourceId || !modeId) {
-      deps.status.textContent = "Pick a source and a mode.";
-      return;
-    }
+    const projectId = deps.getProjectId();
+    if (!projectId) { deps.status.textContent = "Pick a project first."; return; }
+    const project = await deps.projects.get(projectId);
+    if (!project) { deps.status.textContent = "Project not found."; return; }
+    const target = deps.getTargetProvider();
     deps.button.disabled = true;
-    deps.status.textContent = "Compressing…";
+    deps.status.textContent = "Rendering passport…";
     try {
-      const conv = await deps.vault.get(sourceId);
-      if (!conv) throw new Error("Conversation not found");
-      const result = deps.compression.run(modeId, { turns: conv.turns });
-      if (!result.ok) throw new Error(result.error.message);
-      deps.status.textContent = `Injecting ${result.value.text.length} chars (${(result.value.stats.ratio * 100).toFixed(0)}% of original)…`;
-      await deps.inject(result.value.text);
+      const r = deps.continuity.render(deps.modeSelect.value, {
+        projectName: project.name,
+        projectDescription: project.description,
+        passport: project.passport,
+        ...(target ? { targetProviderId: target } : {}),
+      });
+      if (!r.ok) throw new Error(r.error.message);
+      deps.status.textContent = `Injecting ${r.value.stats.chars} chars · ${r.value.stats.facetsIncluded} facets${r.value.stats.facetsExcluded ? ` (skipped ${r.value.stats.facetsExcluded})` : ""}…`;
+      await deps.inject(r.value.text);
       deps.status.textContent = "Injected. Edit, then press Send in the page.";
     } catch (e) {
       deps.status.textContent = `Failed: ${e instanceof Error ? e.message : String(e)}`;
@@ -49,8 +53,4 @@ export async function renderInjector(deps: InjectorViewDeps): Promise<void> {
       deps.button.disabled = false;
     }
   });
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }

@@ -13,22 +13,30 @@
     </header>
 
     <section class="cp-section">
-      <button id="cp-capture" class="cp-btn cp-btn-primary">Capture this conversation</button>
+      <label class="cp-label" for="cp-project">Active project</label>
+      <div class="cp-row">
+        <select id="cp-project" class="cp-select"></select>
+        <button id="cp-new-project" class="cp-btn cp-btn-icon" title="New project">+</button>
+      </div>
+      <p id="cp-passport-stats" class="cp-muted"></p>
+    </section>
+
+    <section class="cp-section">
+      <button id="cp-capture" class="cp-btn cp-btn-primary">Capture this conversation → project</button>
       <p id="cp-capture-status" class="cp-muted"></p>
     </section>
 
     <section class="cp-section">
-      <label class="cp-label" for="cp-mode">Compression mode</label>
+      <label class="cp-label" for="cp-mode">Continuity render</label>
       <select id="cp-mode" class="cp-select"></select>
-      <label class="cp-label" for="cp-source">Source conversation</label>
-      <select id="cp-source" class="cp-select"></select>
-      <button id="cp-inject" class="cp-btn">Compress & inject into current tab</button>
+      <p id="cp-mode-desc" class="cp-muted"></p>
+      <button id="cp-inject" class="cp-btn">Render passport → inject into current tab</button>
       <p id="cp-inject-status" class="cp-muted"></p>
     </section>
 
     <footer class="cp-footer">
-      <a href="#" id="cp-options">Options</a>
-      <span class="cp-muted">v0.1.0 · local-only</span>
+      <a href="#" id="cp-options">Manage projects & passport</a>
+      <span class="cp-muted">v0.2.0 · local-only</span>
     </footer>
 
     <script type="module" src="popup.js"></script>
