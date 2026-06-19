@@ -11,17 +11,29 @@ const dist = path.join(root, "dist");
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 
+const isDev = process.env.CP_BUILD === "dev";
+
 const common = {
   bundle: true,
   format: "esm",
   target: "es2022",
   platform: "browser",
   sourcemap: false,
-  minify: false,
+  // Production: aggressive minification + identifier & property mangling.
+  // Property mangling renames every JS property whose name starts with `_p$`
+  // so non-API internals become unreadable (see naming convention in src/).
+  minify: !isDev,
+  minifyIdentifiers: !isDev,
+  minifySyntax: !isDev,
+  minifyWhitespace: !isDev,
+  mangleProps: isDev ? undefined : /^_p\$/,
+  legalComments: "none",
+  drop: isDev ? [] : ["console", "debugger"],
   logLevel: "info",
   tsconfig: path.join(root, "tsconfig.json"),
   define: { "process.env.NODE_ENV": '"production"' },
 };
+
 
 await Promise.all([
   build({ ...common, entryPoints: [path.join(root, "src/background/index.ts")], outfile: path.join(dist, "background.js") }),
