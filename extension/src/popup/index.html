@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ContextPassport AI</title>
+    <link rel="stylesheet" href="tokens.css" />
+  </head>
+  <body class="cp-popup">
+    <header class="cp-header">
+      <h1>ContextPassport</h1>
+      <span id="cp-provider" class="cp-badge">detecting…</span>
+    </header>
+
+    <section class="cp-section">
+      <button id="cp-capture" class="cp-btn cp-btn-primary">Capture this conversation</button>
+      <p id="cp-capture-status" class="cp-muted"></p>
+    </section>
+
+    <section class="cp-section">
+      <label class="cp-label" for="cp-mode">Compression mode</label>
+      <select id="cp-mode" class="cp-select"></select>
+      <label class="cp-label" for="cp-source">Source conversation</label>
+      <select id="cp-source" class="cp-select"></select>
+      <button id="cp-inject" class="cp-btn">Compress & inject into current tab</button>
+      <p id="cp-inject-status" class="cp-muted"></p>
+    </section>
+
+    <footer class="cp-footer">
+      <a href="#" id="cp-options">Options</a>
+      <span class="cp-muted">v0.1.0 · local-only</span>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
