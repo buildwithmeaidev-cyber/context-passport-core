@@ -2,6 +2,7 @@ import type { ProviderAdapter } from "./ProviderAdapter";
 import { ChatGPTAdapter } from "./chatgpt/ChatGPTAdapter";
 import { ClaudeAdapter } from "./claude/ClaudeAdapter";
 import { GeminiAdapter } from "./gemini/GeminiAdapter";
+import { PerplexityAdapter } from "./perplexity/PerplexityAdapter";
 
 export class ProviderRegistry {
   private readonly adapters: readonly ProviderAdapter[];
@@ -28,5 +29,6 @@ export function createDefaultRegistry(): ProviderRegistry {
     new ChatGPTAdapter(),
     new ClaudeAdapter(),
     new GeminiAdapter(),
+    new PerplexityAdapter(),
   ]);
 }
