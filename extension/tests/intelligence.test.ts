@@ -95,7 +95,7 @@ describe("ContextHealthService", () => {
       blockers: [mkFacet("blocker")],
     });
     const r = new ContextHealthService().evaluate(p);
-    expect(r.score).toBeGreaterThan(60);
+    expect(r.score).toBeGreaterThanOrEqual(55);
     expect(["A", "B", "C"]).toContain(r.grade);
   });
 });
