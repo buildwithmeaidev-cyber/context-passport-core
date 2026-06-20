@@ -15,6 +15,14 @@ export class LicenseService {
     return this.has(`continuity:${modeId}` as FeatureId);
   }
 
+  canUseIntelligence(domain: "developer" | "research" | "founder"): boolean {
+    return this.has(`intelligence:${domain}` as FeatureId);
+  }
+
+  canUseMemory(): boolean {
+    return this.has("memory");
+  }
+
   projectLimit(): number {
     return this.currentPlan.limits.projectsMax;
   }
