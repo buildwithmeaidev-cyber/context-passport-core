@@ -1,8 +1,8 @@
-// Heuristic, local-only extraction of the six continuity facets from a capture.
+// Heuristic, local-only extraction of the nine continuity facets from a capture.
 // No LLM. Patterns are intentionally conservative: better to miss than to lie.
 //
 // All patterns live here so a future swap to a model-based extractor is a
-// single-file change (PassportExtractor stays the same public shape).
+// single-file change (the public extractFacets() shape stays the same).
 
 import type { ConversationTurn } from "./tokens";
 import type { FacetItem, FacetKind } from "./passport";
@@ -18,9 +18,13 @@ interface PatternRule {
 }
 
 const RULES: readonly PatternRule[] = [
-  // Goals — usually user-stated intent
+  // Goals
   { kind: "goal", re: /\b(my goal is|the goal is|i (?:want|need|aim) to|trying to|objective is|i'm building|we're building|let's build)\b/, weight: 0.5, roles: ["user"] },
   { kind: "goal", re: /\b(success looks like|success metric)\b/, weight: 0.4 },
+
+  // Status — "currently / right now / so far"
+  { kind: "status", re: /\b(currently|right now|so far|at the moment|as of now|state of (?:the|this) project|where we are)\b/, weight: 0.45 },
+  { kind: "status", re: /\b(in progress|ongoing|wip|halfway|stuck on|working on)\b/, weight: 0.5 },
 
   // Decisions
   { kind: "decision", re: /\b(decided to|we'll (?:use|go with)|going with|let's use|chose to|i'll use|we picked|we chose)\b/, weight: 0.5 },
@@ -30,13 +34,20 @@ const RULES: readonly PatternRule[] = [
   { kind: "constraint", re: /\b(must not|can't|cannot|should not|never|do not|don't|only|no more than|limited to|at most|requires?|required to)\b/, weight: 0.45 },
   { kind: "constraint", re: /\b(budget|deadline|by (?:monday|tuesday|wednesday|thursday|friday|next week|tomorrow))\b/, weight: 0.4 },
 
-  // Progress
+  // Progress / Completed Work
   { kind: "progress", re: /\b(done|completed|finished|implemented|shipped|added|built|created|set up|deployed|merged)\b/, weight: 0.4 },
   { kind: "progress", re: /\b(working now|works now|is working|is live)\b/, weight: 0.5 },
+
+  // File references
+  { kind: "fileRef", re: /\b[\w\-./]+\.(?:ts|tsx|js|jsx|py|go|rs|java|kt|swift|cpp|c|h|cs|rb|php|sql|md|json|ya?ml|toml|css|scss|html)\b/, weight: 0.5 },
+  { kind: "fileRef", re: /\b(src\/|app\/|lib\/|tests?\/|docs?\/)[\w\-./]+/, weight: 0.4 },
 
   // Open questions
   { kind: "openQuestion", re: /\?$/, weight: 0.5 },
   { kind: "openQuestion", re: /\b(unclear|not sure|don't know|tbd|to be decided|open question|still need to figure)\b/, weight: 0.5 },
+
+  // Blockers
+  { kind: "blocker", re: /\b(blocked (?:by|on)|blocker|can't proceed|stuck because|waiting on|can't move forward|breaking|broken|fails? with|error[: ]|throws)\b/, weight: 0.55 },
 
   // Next actions
   { kind: "nextAction", re: /\b(next (?:step|i'll|we'll)|todo|to do|need to|will (?:add|implement|build|create|deploy|test|write)|i'll (?:add|implement|build|create|deploy|test|write))\b/, weight: 0.5 },
