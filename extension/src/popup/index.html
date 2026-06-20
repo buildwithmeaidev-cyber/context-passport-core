@@ -19,6 +19,11 @@
         <button id="cp-new-project" class="cp-btn cp-btn-icon" title="New project">+</button>
       </div>
       <p id="cp-passport-stats" class="cp-muted"></p>
+      <div class="cp-row" id="cp-health-row">
+        <span id="cp-health-badge" class="cp-badge" data-state="idle">Health —</span>
+        <span id="cp-health-type" class="cp-muted"></span>
+      </div>
+      <ul id="cp-health-recs" class="cp-recs"></ul>
     </section>
 
     <section class="cp-section">
@@ -35,8 +40,8 @@
     </section>
 
     <footer class="cp-footer">
-      <a href="#" id="cp-options">Manage projects & passport</a>
-      <span class="cp-muted">v0.2.0 · local-only</span>
+      <a href="#" id="cp-options">Manage projects, memory & passport</a>
+      <span class="cp-muted">v0.3.0 · local-only</span>
     </footer>
 
     <script type="module" src="popup.js"></script>
