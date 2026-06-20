@@ -1,13 +1,18 @@
 import type { ContextPassport } from "@/core/passport";
+import type { ProjectIntelligence, ProjectMemoryNote } from "@/storage/schema";
 
 export interface RenderInput {
   projectName: string;
   projectDescription: string;
   passport: ContextPassport;
-  /** Optional target provider — strategies may tailor preamble per provider. */
+  /** Optional target provider — strategies tailor the continuation prompt per provider. */
   targetProviderId?: string;
   /** Soft target in characters. Strategies may exceed by 10%. */
   targetChars?: number;
+  /** Domain-specific extracted insights. Required by *-handoff modes. */
+  intelligence?: ProjectIntelligence;
+  /** Persistent project memory. */
+  memory?: ProjectMemoryNote[];
 }
 
 export interface RenderOutput {
@@ -20,13 +25,13 @@ export interface RenderOutput {
 }
 
 /**
- * ContinuityRenderStrategy — renders a Passport into a prompt that
- * re-establishes context in a new AI session.
+ * ContinuityRenderStrategy — renders a Passport (+ intelligence + memory) into
+ * a prompt that re-establishes context in a new AI session.
  *
  * Adding a mode:
  *   1. Create src/services/continuity/strategies/<id>.ts implementing this.
  *   2. Register it in strategies/index.ts.
- *   3. Optionally mark `premium: true` — gating is handled by LicenseService.
+ *   3. Optionally mark `premium: true` — gating handled by LicenseService.
  */
 export interface ContinuityRenderStrategy {
   readonly id: string;
