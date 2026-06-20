@@ -8,6 +8,9 @@ import type { LicenseService } from "@/services/license/LicenseService";
 import type { FeatureFlagService } from "@/services/license/FeatureFlagService";
 import type { CaptureService } from "@/services/capture/CaptureService";
 import type { InjectionService } from "@/services/injection/InjectionService";
+import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
+import type { ContextHealthService } from "@/services/intelligence/ContextHealthService";
+import type { ProjectMemoryService } from "@/services/intelligence/ProjectMemoryService";
 
 export const Tokens = {
   Logger: new Token<Logger>("Logger"),
@@ -19,6 +22,9 @@ export const Tokens = {
   Flags: new Token<FeatureFlagService>("FeatureFlagService"),
   Capture: new Token<CaptureService>("CaptureService"),
   Injection: new Token<InjectionService>("InjectionService"),
+  Intelligence: new Token<IntelligenceService>("IntelligenceService"),
+  Health: new Token<ContextHealthService>("ContextHealthService"),
+  Memory: new Token<ProjectMemoryService>("ProjectMemoryService"),
 } as const;
 
 export interface ConversationTurn {

@@ -59,3 +59,9 @@ body { margin: 0; background: var(--cp-bg); color: var(--cp-text); font-size: 13
 .cp-actions button { background: none; border: 1px solid var(--cp-border); color: var(--cp-muted); padding: 1px 6px; font-size: 11px; border-radius: 4px; cursor: pointer; }
 .cp-actions button:hover { color: var(--cp-text); }
 code { background: var(--cp-surface); padding: 1px 4px; border-radius: 3px; }
+
+/* Health badge states */
+.cp-badge[data-state="warn"] { background: #b8860020; color: #d4a300; border-color: #d4a30040; }
+.cp-badge[data-state="bad"] { background: #b3261e20; color: #ff6b6b; border-color: #ff6b6b40; }
+.cp-recs { list-style: disc; padding-left: 18px; margin: 8px 0 0; color: var(--cp-muted); font-size: 11px; }
+.cp-recs li { margin: 2px 0; }

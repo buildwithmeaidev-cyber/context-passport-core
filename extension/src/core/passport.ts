@@ -1,13 +1,16 @@
 // Domain model for AI Work Continuity.
-// A Project owns a ContextPassport: six structured facets that survive across
+// A Project owns a ContextPassport: nine structured facets that survive across
 // AI systems. Captures are inputs; the passport is the durable artifact.
 
 export type FacetKind =
   | "goal"
+  | "status"
   | "decision"
   | "constraint"
   | "progress"
+  | "fileRef"
   | "openQuestion"
+  | "blocker"
   | "nextAction";
 
 export interface FacetItem {
@@ -31,36 +34,61 @@ export interface FacetItem {
 
 export interface ContextPassport {
   goals: FacetItem[];
+  status: FacetItem[];
   decisions: FacetItem[];
   constraints: FacetItem[];
   progress: FacetItem[];
+  filesReferenced: FacetItem[];
   openQuestions: FacetItem[];
+  blockers: FacetItem[];
   nextActions: FacetItem[];
 }
 
 export const EMPTY_PASSPORT: ContextPassport = {
   goals: [],
+  status: [],
   decisions: [],
   constraints: [],
   progress: [],
+  filesReferenced: [],
   openQuestions: [],
+  blockers: [],
   nextActions: [],
 };
 
 export const FACET_LABELS: Record<FacetKind, string> = {
-  goal: "Goals",
-  decision: "Decisions",
+  goal: "Project Goal",
+  status: "Current Status",
+  decision: "Important Decisions",
   constraint: "Constraints",
-  progress: "Progress",
+  progress: "Completed Work",
+  fileRef: "Files Referenced",
   openQuestion: "Open Questions",
+  blocker: "Blockers",
   nextAction: "Next Actions",
 };
 
 export const FACET_TO_FIELD: Record<FacetKind, keyof ContextPassport> = {
   goal: "goals",
+  status: "status",
   decision: "decisions",
   constraint: "constraints",
   progress: "progress",
+  fileRef: "filesReferenced",
   openQuestion: "openQuestions",
+  blocker: "blockers",
   nextAction: "nextActions",
 };
+
+/** Order used for canonical render output across all modes. */
+export const FACET_ORDER: readonly FacetKind[] = [
+  "goal",
+  "status",
+  "progress",
+  "decision",
+  "constraint",
+  "fileRef",
+  "openQuestion",
+  "blocker",
+  "nextAction",
+];

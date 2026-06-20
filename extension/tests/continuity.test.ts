@@ -12,35 +12,65 @@ const passport: ContextPassport = {
 };
 
 describe("ContinuityService", () => {
-  it("lists all built-in strategies", () => {
+  it("registers all 9 built-in strategies", () => {
     const svc = new ContinuityService(new LicenseService());
-    expect(svc.list().map((s) => s.id).sort()).toEqual(["brief", "essential", "full", "handoff"]);
+    expect(svc.list().map((s) => s.id).sort()).toEqual([
+      "balanced",
+      "brief",
+      "developer-handoff",
+      "essential",
+      "founder-handoff",
+      "full",
+      "handoff",
+      "quick",
+      "research-handoff",
+    ]);
   });
 
-  it("essential mode renders goals/decisions/constraints/next-actions only", () => {
+  it("balanced mode renders goals/decisions/next-actions and continuation preamble", () => {
     const svc = new ContinuityService(new LicenseService());
-    const r = svc.render("essential", { projectName: "P", projectDescription: "", passport });
+    const r = svc.render("balanced", { projectName: "P", projectDescription: "", passport, targetProviderId: "claude" });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.text).toContain("Ship continuity v1");
       expect(r.value.text).toContain("Use Manifest V3");
       expect(r.value.text).toContain("Write docs");
+      expect(r.value.text.toLowerCase()).toContain("claude");
     }
   });
 
-  it("blocks handoff on free tier", () => {
+  it("quick mode produces a single-paragraph synthesis", () => {
     const svc = new ContinuityService(new LicenseService());
-    const r = svc.render("handoff", { projectName: "P", projectDescription: "", passport });
+    const r = svc.render("quick", { projectName: "P", projectDescription: "", passport });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.text).toContain("Ship continuity v1");
+  });
+
+  it("blocks developer-handoff on free tier", () => {
+    const svc = new ContinuityService(new LicenseService());
+    const r = svc.render("developer-handoff", { projectName: "P", projectDescription: "", passport });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("PREMIUM_REQUIRED");
   });
 
-  it("allows handoff on pro tier and includes provider preamble", () => {
+  it("allows research-handoff on pro tier with provider preamble", () => {
     const lic = new LicenseService();
     lic._setPlanForTesting("pro");
     const svc = new ContinuityService(lic);
-    const r = svc.render("handoff", { projectName: "P", projectDescription: "", passport, targetProviderId: "claude" });
+    const r = svc.render("research-handoff", {
+      projectName: "P", projectDescription: "", passport, targetProviderId: "perplexity",
+      intelligence: {
+        conversationType: "research",
+        developer: { techStack: [], architecture: [], apis: [], dbDesign: [], bugs: [], todos: [] },
+        research: { findings: ["Finding A"], sources: ["https://x"], contradictions: [], openQuestions: [] },
+        founder: { problem: [], market: [], revenueModel: [], validation: [], risks: [] },
+        updatedAt: 0,
+      },
+    });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.text.toLowerCase()).toContain("claude");
+    if (r.ok) {
+      expect(r.value.text.toLowerCase()).toContain("perplexity");
+      expect(r.value.text).toContain("Finding A");
+    }
   });
 });

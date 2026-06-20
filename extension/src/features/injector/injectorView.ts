@@ -41,6 +41,8 @@ export async function renderInjector(deps: InjectorViewDeps): Promise<void> {
         projectName: project.name,
         projectDescription: project.description,
         passport: project.passport,
+        intelligence: project.intelligence,
+        memory: project.memory,
         ...(target ? { targetProviderId: target } : {}),
       });
       if (!r.ok) throw new Error(r.error.message);

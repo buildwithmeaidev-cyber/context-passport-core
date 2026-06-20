@@ -6,6 +6,10 @@ export type FeatureId =
   | "inject"
   | "projects-unlimited"
   | "export"
+  | "intelligence:developer"
+  | "intelligence:research"
+  | "intelligence:founder"
+  | "memory"
   | `continuity:${string}`;
 
 export interface PricingPlan {
@@ -19,50 +23,51 @@ export interface PricingPlan {
   };
 }
 
+const FREE_FEATURES: FeatureId[] = [
+  "capture",
+  "inject",
+  "continuity:quick",
+  "continuity:balanced",
+  // legacy modes kept usable on free
+  "continuity:brief",
+  "continuity:essential",
+  "continuity:full",
+];
+
+const PRO_FEATURES: FeatureId[] = [
+  ...FREE_FEATURES,
+  "continuity:handoff",
+  "continuity:developer-handoff",
+  "continuity:research-handoff",
+  "continuity:founder-handoff",
+  "intelligence:developer",
+  "intelligence:research",
+  "intelligence:founder",
+  "memory",
+  "projects-unlimited",
+  "export",
+];
+
 export const PLANS: readonly PricingPlan[] = [
   {
     id: "free",
     label: "Free",
     monthlyPriceUsd: 0,
-    features: [
-      "capture",
-      "inject",
-      "continuity:brief",
-      "continuity:essential",
-      "continuity:full",
-    ],
+    features: FREE_FEATURES,
     limits: { projectsMax: 3, capturesPerProject: 20 },
   },
   {
     id: "pro",
     label: "Pro",
     monthlyPriceUsd: 6,
-    features: [
-      "capture",
-      "inject",
-      "continuity:brief",
-      "continuity:essential",
-      "continuity:full",
-      "continuity:handoff",
-      "projects-unlimited",
-      "export",
-    ],
+    features: PRO_FEATURES,
     limits: { projectsMax: 0, capturesPerProject: 0 },
   },
   {
     id: "team",
     label: "Team",
     monthlyPriceUsd: 14,
-    features: [
-      "capture",
-      "inject",
-      "continuity:brief",
-      "continuity:essential",
-      "continuity:full",
-      "continuity:handoff",
-      "projects-unlimited",
-      "export",
-    ],
+    features: PRO_FEATURES,
     limits: { projectsMax: 0, capturesPerProject: 0 },
   },
 ];

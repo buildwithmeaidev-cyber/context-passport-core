@@ -5,15 +5,20 @@ import { EMPTY_PASSPORT, FACET_TO_FIELD } from "@/core/passport";
 import { extractFacets } from "@/core/extractFacets";
 import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
+import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
 
 const MAX_CAPTURES_PER_PROJECT = 50;
 
 /**
  * ProjectService — CRUD for projects + the merge logic that turns captures
- * into passport facets. UI never builds passports itself; it asks this service.
+ * into passport facets, and runs the IntelligenceService over each capture
+ * to maintain domain-specific insights.
  */
 export class ProjectService {
-  constructor(private readonly storage: StorageGateway) {}
+  constructor(
+    private readonly storage: StorageGateway,
+    private readonly intelligence?: IntelligenceService,
+  ) {}
 
   async list(): Promise<Project[]> {
     const r = await this.storage.read("projects");
@@ -34,6 +39,14 @@ export class ProjectService {
       updatedAt: now,
       passport: EMPTY_PASSPORT,
       captures: [],
+      intelligence: {
+        conversationType: "general",
+        developer: { techStack: [], architecture: [], apis: [], dbDesign: [], bugs: [], todos: [] },
+        research: { findings: [], sources: [], contradictions: [], openQuestions: [] },
+        founder: { problem: [], market: [], revenueModel: [], validation: [], risks: [] },
+        updatedAt: 0,
+      },
+      memory: [],
     };
     const next = [project, ...(await this.list())];
     const w = await this.storage.write("projects", next);
@@ -52,8 +65,8 @@ export class ProjectService {
   }
 
   /**
-   * Append a capture to a project AND merge its extracted facets into the
-   * project's passport. This is the central continuity operation.
+   * Append a capture, merge facets into the passport, and refresh
+   * domain-specific intelligence. The central continuity operation.
    */
   async ingestCapture(projectId: string, captured: CapturedConversation): Promise<Result<Project>> {
     const project = await this.get(projectId);
@@ -76,11 +89,15 @@ export class ProjectService {
 
     const merged = mergePassport(project.passport as ContextPassport, facets);
     const captures = [capture, ...project.captures].slice(0, MAX_CAPTURES_PER_PROJECT);
+    const intelligence = this.intelligence
+      ? this.intelligence.enrich(project.intelligence, captured.turns, Date.now())
+      : project.intelligence;
 
     const next: Project = {
       ...project,
       passport: merged as Project["passport"],
       captures,
+      intelligence,
       updatedAt: Date.now(),
     };
     const w = await this.replace(next);
@@ -147,10 +164,13 @@ export class ProjectService {
 function mergePassport(existing: ContextPassport, incoming: FacetItem[]): ContextPassport {
   const next: ContextPassport = {
     goals: [...existing.goals],
+    status: [...existing.status],
     decisions: [...existing.decisions],
     constraints: [...existing.constraints],
     progress: [...existing.progress],
+    filesReferenced: [...existing.filesReferenced],
     openQuestions: [...existing.openQuestions],
+    blockers: [...existing.blockers],
     nextActions: [...existing.nextActions],
   };
   for (const item of incoming) {
@@ -158,13 +178,11 @@ function mergePassport(existing: ContextPassport, incoming: FacetItem[]): Contex
     const norm = normalize(item.text);
     const dup = next[field].find((x) => normalize(x.text) === norm);
     if (dup) {
-      // Boost confidence on repeat observation; keep oldest source/pin state.
       dup.confidence = Math.min(1, dup.confidence + 0.1);
       continue;
     }
     next[field].push(item);
   }
-  // Cap per-facet length to keep storage bounded; drop lowest-confidence non-pinned.
   for (const field of Object.values(FACET_TO_FIELD)) {
     next[field] = capFacet(next[field], 30);
   }
