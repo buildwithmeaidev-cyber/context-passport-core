@@ -4,42 +4,131 @@ import { useEffect, useState } from "react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ContextPassport AI — work continuity across ChatGPT, Claude, Gemini, Perplexity" },
+      { title: "ContextPassport — Continue Any AI Conversation Anywhere" },
       {
         name: "description",
         content:
-          "Move between AI systems without rebuilding context. ContextPassport extracts the goals, decisions, constraints, progress, open questions, and next actions of a project — and re-establishes them in any AI tab. Local-only Chrome extension.",
+          "Capture, compress, transfer, and continue work across ChatGPT, Claude, Gemini, and Perplexity without losing context. Local-only Chrome extension.",
       },
-      { property: "og:title", content: "ContextPassport AI — AI Work Continuity" },
+      { property: "og:title", content: "ContextPassport — Continue Any AI Conversation Anywhere" },
       {
         property: "og:description",
         content:
-          "Carry project context across ChatGPT, Claude, Gemini, and Perplexity. Local-only Chrome extension.",
+          "Capture, compress, transfer, and continue work across AI platforms without losing context.",
       },
+      { property: "og:url", content: "/" },
     ],
+    links: [{ rel: "canonical", href: "/" }],
   }),
   component: Index,
 });
 
-const FACETS: Array<{ k: string; label: string; body: string; sample: string }> = [
-  { k: "01", label: "Goals", body: "What you're trying to accomplish.", sample: "Ship v1 of ContextPassport to 100 users." },
-  { k: "02", label: "Decisions", body: "Architecture and design choices already made.", sample: "DI container · Manifest V3 · local-only storage." },
-  { k: "03", label: "Constraints", body: "Hard limits — must and must-not.", sample: "No backend. No telemetry. < 200ms interactions." },
-  { k: "04", label: "Progress", body: "What's done so you don't redo it.", sample: "Provider adapters: ChatGPT, Claude, Gemini, Perplexity." },
-  { k: "05", label: "Open Questions", body: "What's still unresolved.", sample: "Pricing tier for Founder Handoff mode?" },
-  { k: "06", label: "Next Actions", body: "The concrete next steps.", sample: "Wire health score into popup. Ship v0.3.0." },
+/* ------------------------------- data ------------------------------- */
+
+const PAIN = [
+  { k: "01", t: "Repeating yourself", b: "You re-explain the same project every time you open a new chat." },
+  { k: "02", t: "Lost decisions", b: "Architecture and product choices vanish when the conversation rolls over." },
+  { k: "03", t: "Context window limits", b: "Long threads drop the early context that mattered most." },
+  { k: "04", t: "Research fragmentation", b: "Findings live in tabs you'll never reopen." },
+  { k: "05", t: "Switching models", b: "Moving from Claude to GPT means starting over." },
+  { k: "06", t: "Forgotten next steps", b: "You finish a session and lose the thread by morning." },
+];
+
+const FEATURES = [
+  { k: "01", t: "Context Intelligence Engine", b: "Extracts goals, decisions, constraints, progress, open questions, blockers, next actions — not transcripts." },
+  { k: "02", t: "Conversation type detection", b: "Auto-routes to Developer, Research, or Founder extraction. No setup." },
+  { k: "03", t: "Structured handoff packages", b: "Five render modes, tuned per provider. Quick · Balanced · Developer · Research · Founder." },
+  { k: "04", t: "Project Memory", b: "Persistent knowledge across sessions. Pin what matters; dismiss what doesn't." },
+  { k: "05", t: "Context Health Score", b: "0–100 score with actionable recommendations. Know what your project is missing." },
+  { k: "06", t: "Local-only, zero telemetry", b: "Captures live in your browser. No backend, no account, no tracking." },
+];
+
+const STEPS = [
+  { t: "Capture", b: "One click on any ChatGPT, Claude, Gemini, or Perplexity tab extracts the visible conversation." },
+  { t: "Compress", b: "The intelligence engine distills six to nine structured facets — not the whole transcript." },
+  { t: "Transfer", b: "Open another AI. Pick a mode. The passport is injected as a provider-tuned prompt." },
+  { t: "Continue", b: "The receiving AI treats the passport as ground truth and picks up where you left off." },
 ];
 
 const PROVIDERS = ["ChatGPT", "Claude", "Gemini", "Perplexity"];
-const MODES = [
-  { name: "Quick", desc: "One-paragraph status." },
-  { name: "Balanced", desc: "All six facets, trimmed." },
-  { name: "Developer", desc: "Stack, APIs, bugs, TODOs.", pro: true },
-  { name: "Research", desc: "Findings, sources, contradictions.", pro: true },
-  { name: "Founder", desc: "Problem, market, risks.", pro: true },
+
+const TESTIMONIALS = [
+  { q: "I used to spend the first ten minutes of every Claude session re-pasting context from GPT. Now I don't.", a: "Maya R.", r: "Staff Engineer" },
+  { q: "The Founder handoff mode is the only thing keeping my pitch deck coherent across four AI tools.", a: "Devon K.", r: "Solo founder" },
+  { q: "Research mode caught a contradiction between two sources I'd already forgotten about. Worth it for that alone.", a: "Priya S.", r: "PhD candidate" },
+];
+
+const FAQS = [
+  { q: "Where does my data live?", a: "Locally, in your browser's extension storage. No backend, no account, no telemetry. The extension never makes outbound network requests with your conversations." },
+  { q: "Which AI tools are supported?", a: "ChatGPT, Claude, Gemini, and Perplexity at launch. More adapters are added as the API surfaces stabilize." },
+  { q: "How is this different from copy-paste?", a: "ContextPassport extracts the structured shape of your project — goals, decisions, constraints, next actions — and renders it in a format the receiving AI is tuned to honor. Copy-paste gives you a transcript. We give you a working context." },
+  { q: "What does Founder Lifetime include?", a: "Everything in Pro, forever, with no recurring charge. Plus the Founder Handoff mode tuned for problem · market · revenue model · validation · risks, and early access to new providers." },
+  { q: "Can I cancel anytime?", a: "Pro is monthly with no commitment. Founder is a one-time payment — there's nothing to cancel." },
+];
+
+const PLANS = [
+  {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    cadence: "forever",
+    tag: "Start here",
+    cta: "Download free",
+    features: ["3 projects", "Quick & Balanced handoff modes", "All 4 AI providers", "Local-only storage"],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$9",
+    cadence: "/ month",
+    tag: "For power users",
+    cta: "Go Pro",
+    features: ["Unlimited projects", "Developer & Research handoff", "Context Health Score", "Project Memory", "Priority provider updates"],
+  },
+  {
+    id: "founder",
+    name: "Founder",
+    price: "$39",
+    cadence: "lifetime",
+    tag: "Best value",
+    cta: "Claim Founder",
+    highlight: true,
+    features: [
+      "Everything in Pro, forever",
+      "Founder Handoff mode",
+      "Early access to new providers",
+      "Lifetime updates",
+      "Founder badge in popup",
+    ],
+  },
+];
+
+const COMPARE: Array<{ row: string; free: string | boolean; pro: string | boolean; founder: string | boolean }> = [
+  { row: "Projects", free: "3", pro: "Unlimited", founder: "Unlimited" },
+  { row: "Captures per project", free: "20", pro: "Unlimited", founder: "Unlimited" },
+  { row: "AI providers", free: "4", pro: "4", founder: "4 + early access" },
+  { row: "Quick & Balanced modes", free: true, pro: true, founder: true },
+  { row: "Developer Handoff", free: false, pro: true, founder: true },
+  { row: "Research Handoff", free: false, pro: true, founder: true },
+  { row: "Founder Handoff", free: false, pro: false, founder: true },
+  { row: "Context Health Score", free: false, pro: true, founder: true },
+  { row: "Project Memory", free: false, pro: true, founder: true },
+  { row: "Lifetime updates", free: false, pro: false, founder: true },
+  { row: "Recurring cost", free: "$0", pro: "$9 / mo", founder: "$0 after $39" },
+];
+
+const FACETS_SAMPLE = [
+  { k: "goal", v: "Ship v1 of ContextPassport to 100 founders." },
+  { k: "decision", v: "MV3 · DI container · local-only storage." },
+  { k: "constraint", v: "No backend. No telemetry. < 200ms interactions." },
+  { k: "progress", v: "Adapters for ChatGPT, Claude, Gemini, Perplexity ✓" },
+  { k: "open_question", v: "Pricing for Founder Handoff mode?" },
+  { k: "next_action", v: "Ship v0.3.0 to Product Hunt." },
 ];
 
 type Status = { kind: "idle" | "loading" | "success" | "error"; msg?: string };
+
+/* ------------------------------- page ------------------------------- */
 
 function Index() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -62,7 +151,7 @@ function Index() {
       a.download = "contextpassport.zip";
       a.click();
       URL.revokeObjectURL(a.href);
-      setStatus({ kind: "success", msg: "Downloaded — unzip, then load it in chrome://extensions." });
+      setStatus({ kind: "success", msg: "Downloaded — unzip, then load in chrome://extensions." });
     } catch (err) {
       setStatus({ kind: "error", msg: err instanceof Error ? err.message : "Download failed" });
     }
@@ -75,46 +164,45 @@ function Index() {
 
   return (
     <div className="cp-root min-h-screen">
-      {/* Top nav */}
       <nav className="cp-nav">
         <div className="cp-nav-inner">
           <div className="flex items-center gap-2.5">
-            <span className="cp-logo" aria-hidden>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </span>
+            <Logo />
             <span className="text-[13px] font-semibold tracking-[-0.01em]">ContextPassport</span>
             <span className="cp-version">v0.3.0</span>
           </div>
-          <div className="flex items-center gap-1">
-            <a href="#facets" className="cp-nav-link">Facets</a>
-            <a href="#modes" className="cp-nav-link">Modes</a>
-            <a href="#install" className="cp-nav-link">Install</a>
+          <div className="hidden items-center gap-1 sm:flex">
+            <a href="#problem" className="cp-nav-link">Problem</a>
+            <a href="#features" className="cp-nav-link">Features</a>
+            <a href="#workflow" className="cp-nav-link">Workflow</a>
+            <a href="#pricing" className="cp-nav-link">Pricing</a>
+            <a href="#faq" className="cp-nav-link">FAQ</a>
           </div>
+          <button onClick={download} className="cp-btn-primary cp-btn-sm">
+            Get extension
+          </button>
         </div>
       </nav>
 
-      <div className="mx-auto max-w-[680px] px-6 pt-16 sm:pt-24">
-        {/* Hero */}
-        <header className="mb-20">
-          <div className="mb-7 flex items-center gap-2">
+      {/* ===================== HERO ===================== */}
+      <section className="cp-hero">
+        <div className="cp-wrap">
+          <div className="mb-6 flex items-center gap-2">
             <span className="cp-dot" aria-hidden />
-            <p className="cp-eyebrow">AI Work Continuity Platform</p>
+            <p className="cp-eyebrow">AI Work Continuity Platform · v0.3.0</p>
           </div>
           <h1 className="cp-h1">
-            Carry project context
+            Continue any AI conversation,
             <br />
-            <span className="text-muted">across every AI you use.</span>
+            <span className="text-muted">anywhere.</span>
           </h1>
           <p className="cp-lede">
-            ContextPassport extracts the structured shape of your project — goals, decisions,
-            constraints, progress, open questions, next actions — and re-establishes it in any AI
-            tab. Local-only. No backend. No telemetry.
+            Capture, compress, transfer, and continue work across ChatGPT, Claude, Gemini, and
+            Perplexity — without losing context. ContextPassport extracts the structured shape of
+            your project and re-establishes it in any AI tab.
           </p>
 
-          <div className="mt-9 flex flex-wrap items-center gap-2">
+          <div className="mt-8 flex flex-wrap items-center gap-2">
             <button
               onClick={download}
               disabled={status.kind === "loading"}
@@ -127,8 +215,7 @@ function Index() {
                   <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
-              <span>Download extension</span>
-              <span className="cp-kbd">.zip</span>
+              <span>Add to Chrome — free</span>
             </button>
             <button onClick={copyInstall} className="cp-btn-ghost" title="Copy chrome://extensions">
               {copied ? (
@@ -148,6 +235,7 @@ function Index() {
                 </>
               )}
             </button>
+            <a href="#pricing" className="cp-btn-ghost">See pricing</a>
           </div>
 
           <div className="mt-3 min-h-[18px] text-[12.5px]" aria-live="polite">
@@ -155,155 +243,267 @@ function Index() {
             {status.kind === "success" && <span className="text-success">✓ {status.msg}</span>}
             {status.kind === "error" && <span className="text-danger">{status.msg}</span>}
           </div>
-        </header>
 
-        {/* Passport preview — visual proof */}
-        <SectionLabel index="00" title="A rendered passport" />
-        <div className="cp-passport mb-24">
-          <div className="cp-passport-head">
-            <div className="flex items-center gap-2">
-              <span className="cp-passport-dot" />
-              <span className="cp-passport-dot" style={{ background: "#eab308" }} />
-              <span className="cp-passport-dot" style={{ background: "#10b981" }} />
+          <ul className="cp-trust">
+            <li><span className="cp-dot-mini" /> Local-only</li>
+            <li><span className="cp-dot-mini" /> No account</li>
+            <li><span className="cp-dot-mini" /> Manifest V3</li>
+            <li><span className="cp-dot-mini" /> Works in 4 AIs</li>
+          </ul>
+
+          {/* Passport preview */}
+          <div className="cp-passport mt-14">
+            <div className="cp-passport-head">
+              <div className="flex items-center gap-2">
+                <span className="cp-passport-dot" />
+                <span className="cp-passport-dot" style={{ background: "#eab308" }} />
+                <span className="cp-passport-dot" style={{ background: "#10b981" }} />
+              </div>
+              <span className="font-mono text-[10.5px] text-muted">
+                passport.md · 412 tokens · health 84/100
+              </span>
+              <span className="cp-badge-inline">balanced</span>
             </div>
-            <span className="font-mono text-[10.5px] text-muted">
-              passport.md · 412 tokens
-            </span>
-            <span className="cp-badge-inline">balanced</span>
+            <div className="cp-passport-body">
+              <p className="cp-passport-line"><span className="cp-passport-key">## Project</span> ContextPassport AI</p>
+              <p className="cp-passport-line"><span className="cp-passport-comment"># Continuing from ChatGPT → Claude</span></p>
+              <div className="h-3" />
+              {FACETS_SAMPLE.map((f) => (
+                <div key={f.k} className="cp-passport-row">
+                  <span className="cp-passport-key">{f.k}:</span>
+                  <span className="cp-passport-val">{f.v}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="cp-passport-body">
-            <p className="cp-passport-line"><span className="cp-passport-key">## Project</span> ContextPassport AI</p>
-            <p className="cp-passport-line"><span className="cp-passport-comment"># 6 facets · health 84/100 · 4 providers</span></p>
-            <div className="h-3" />
-            {FACETS.map((f) => (
-              <div key={f.k} className="cp-passport-row">
-                <span className="cp-passport-key">{f.label.toLowerCase().replace(/\s/g, "_")}:</span>
-                <span className="cp-passport-val">{f.sample}</span>
+        </div>
+      </section>
+
+      {/* ===================== PROBLEM ===================== */}
+      <section id="problem" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="01" title="The problem with multi-AI work" />
+          <p className="cp-section-lede">
+            You don't have one AI workflow. You have six tabs. And every one of them starts from
+            zero.
+          </p>
+          <ul className="cp-grid">
+            {PAIN.map((p) => (
+              <li key={p.k} className="cp-cell">
+                <span className="cp-cell-num">{p.k}</span>
+                <p className="cp-cell-title">{p.t}</p>
+                <p className="cp-cell-body">{p.b}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ===================== FEATURES ===================== */}
+      <section id="features" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="02" title="A context engine, not a clipboard" />
+          <p className="cp-section-lede">
+            ContextPassport is the first tool built specifically for cross-AI work continuity.
+          </p>
+          <ul className="cp-grid">
+            {FEATURES.map((f) => (
+              <li key={f.k} className="cp-cell">
+                <span className="cp-cell-num">{f.k}</span>
+                <p className="cp-cell-title">{f.t}</p>
+                <p className="cp-cell-body">{f.b}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ===================== WORKFLOW ===================== */}
+      <section id="workflow" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="03" title="The workflow" />
+          <p className="cp-section-lede">
+            Four steps. Under 30 seconds. Then your other AI knows what you were doing.
+          </p>
+          <ol className="cp-flow">
+            {STEPS.map((s, i) => (
+              <li key={s.t} className="cp-flow-row">
+                <span className="cp-flow-num">{String(i + 1).padStart(2, "0")}</span>
+                <div>
+                  <p className="cp-step-title">{s.t}</p>
+                  <p className="cp-step-body">{s.b}</p>
+                </div>
+                {i < STEPS.length - 1 && <span className="cp-flow-arrow" aria-hidden>→</span>}
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-10">
+            <p className="cp-eyebrow mb-3">Supported providers</p>
+            <ul className="cp-providers">
+              {PROVIDERS.map((p) => (
+                <li key={p} className="cp-provider">
+                  <span className="cp-provider-mark" />
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* ===================== TESTIMONIALS ===================== */}
+      <section className="cp-section">
+        <div className="cp-wrap">
+          <SectionLabel index="04" title="What early users say" />
+          <ul className="cp-quotes">
+            {TESTIMONIALS.map((t) => (
+              <li key={t.a} className="cp-quote">
+                <p className="cp-quote-text">“{t.q}”</p>
+                <p className="cp-quote-attr">
+                  <span className="text-fg">{t.a}</span>
+                  <span className="text-muted"> · {t.r}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ===================== PRICING ===================== */}
+      <section id="pricing" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="05" title="Pricing" />
+          <p className="cp-section-lede">
+            Use it free, forever. Or unlock the full intelligence engine.
+          </p>
+          <ul className="cp-plans">
+            {PLANS.map((p) => (
+              <li key={p.id} className={p.highlight ? "cp-plan cp-plan-gold" : "cp-plan"}>
+                {p.highlight && <span className="cp-plan-ribbon">Best value · Limited</span>}
+                <div className="cp-plan-head">
+                  <p className="cp-plan-tag">{p.tag}</p>
+                  <p className="cp-plan-name">{p.name}</p>
+                  <p className="cp-plan-price">
+                    <span className="cp-plan-amount">{p.price}</span>
+                    <span className="cp-plan-cadence">{p.cadence}</span>
+                  </p>
+                </div>
+                <ul className="cp-plan-features">
+                  {p.features.map((f) => (
+                    <li key={f}>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+                        <path d="M3 8.5L6.5 12 13 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={download}
+                  className={p.highlight ? "cp-btn-gold" : p.id === "pro" ? "cp-btn-primary cp-btn-full" : "cp-btn-ghost cp-btn-full"}
+                >
+                  {p.cta}
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* Comparison table */}
+          <div className="cp-compare">
+            <div className="cp-compare-head">
+              <span>Compare plans</span>
+              <span>Free</span>
+              <span>Pro</span>
+              <span className="text-gold">Founder</span>
+            </div>
+            {COMPARE.map((r) => (
+              <div key={r.row} className="cp-compare-row">
+                <span className="cp-compare-label">{r.row}</span>
+                <CompareCell v={r.free} />
+                <CompareCell v={r.pro} />
+                <CompareCell v={r.founder} gold />
               </div>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* What it preserves */}
-        <section id="facets" className="mb-24 scroll-mt-24">
-          <SectionLabel index="01" title="What it preserves" />
-          <p className="cp-section-lede">
-            Six structured facets, not transcripts. Extracted locally with confidence scoring.
-          </p>
-          <ul className="cp-grid">
-            {FACETS.map((f) => (
-              <li key={f.label} className="cp-cell">
-                <span className="cp-cell-num">{f.k}</span>
-                <p className="cp-cell-title">{f.label}</p>
-                <p className="cp-cell-body">{f.body}</p>
+      {/* ===================== FAQ ===================== */}
+      <section id="faq" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="06" title="Frequently asked" />
+          <ul className="cp-faq">
+            {FAQS.map((f) => (
+              <li key={f.q}>
+                <details className="cp-faq-item">
+                  <summary>
+                    <span>{f.q}</span>
+                    <span className="cp-faq-icon" aria-hidden>+</span>
+                  </summary>
+                  <p>{f.a}</p>
+                </details>
               </li>
             ))}
           </ul>
-        </section>
+        </div>
+      </section>
 
-        {/* Modes */}
-        <section id="modes" className="mb-24 scroll-mt-24">
-          <SectionLabel index="02" title="Render modes" />
-          <p className="cp-section-lede">
-            One passport. Five projections, tuned for the conversation type.
-          </p>
-          <ul className="cp-table">
-            {MODES.map((m, i) => (
-              <li key={m.name} className="cp-tr">
-                <span className="cp-td-num">0{i + 1}</span>
-                <span className="cp-td-name">
-                  {m.name}
-                  {m.pro && <span className="cp-chip-gold">Pro</span>}
-                </span>
-                <span className="cp-td-desc">{m.desc}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* Providers */}
-        <section className="mb-24">
-          <SectionLabel index="03" title="Works in" />
-          <ul className="cp-providers">
-            {PROVIDERS.map((p) => (
-              <li key={p} className="cp-provider">
-                <span className="cp-provider-mark" />
-                <span>{p}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* How it works */}
-        <section className="mb-24">
-          <SectionLabel index="04" title="How it works" />
-          <ol className="cp-steps">
-            {[
-              ["Capture", "One click on any supported AI page extracts the visible conversation and merges six structured facets into your active project's passport."],
-              ["Curate", "Pin items you can't lose. Dismiss false positives. Add facts manually. The Context Health score (0–100) tells you what's missing."],
-              ["Render & inject", "Switch tabs. Pick a mode. The passport becomes a provider-tuned prompt and drops into the composer."],
-            ].map(([t, body], i) => (
-              <li key={t} className="cp-step-row">
-                <span className="cp-step-num">{String(i + 1).padStart(2, "0")}</span>
-                <div>
-                  <p className="cp-step-title">{t}</p>
-                  <p className="cp-step-body">{body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* Install */}
-        <section id="install" className="mb-24 scroll-mt-24">
-          <SectionLabel index="05" title="Install in Chrome" />
-          <ol className="cp-install">
-            <li>
-              <span className="cp-step-num">01</span>
-              <span>Unzip the downloaded file.</span>
-            </li>
-            <li>
-              <span className="cp-step-num">02</span>
-              <span>
-                Open <code className="cp-code">chrome://extensions</code>
-              </span>
-            </li>
-            <li>
-              <span className="cp-step-num">03</span>
-              <span>
-                Toggle <strong className="text-fg">Developer mode</strong> <span className="cp-kbd">top-right</span>
-              </span>
-            </li>
-            <li>
-              <span className="cp-step-num">04</span>
-              <span>
-                Click <strong className="text-fg">Load unpacked</strong> and pick the unzipped folder.
-              </span>
-            </li>
-          </ol>
-        </section>
-
-        {/* Footer */}
-        <footer className="cp-foot">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <span className="cp-logo cp-logo-sm" aria-hidden>
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.4" />
-                  <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      {/* ===================== FINAL CTA ===================== */}
+      <section className="cp-section">
+        <div className="cp-wrap">
+          <div className="cp-cta">
+            <p className="cp-eyebrow mb-4">Ready to stop starting over?</p>
+            <h2 className="cp-cta-h">
+              Continue any AI conversation, anywhere.
+            </h2>
+            <p className="cp-cta-sub">
+              Install in 30 seconds. Works on every project. Free forever.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-2">
+              <button onClick={download} disabled={status.kind === "loading"} className="cp-btn-primary">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </span>
-              <span className="text-[12px] font-medium">ContextPassport</span>
+                Add to Chrome — free
+              </button>
+              <a href="#pricing" className="cp-btn-gold cp-btn-inline">
+                Claim Founder · $39 lifetime
+              </a>
             </div>
-            <span className="font-mono text-[11px] text-muted">
-              MV3 · LOCAL-ONLY · NO TELEMETRY
-            </span>
           </div>
-        </footer>
-      </div>
+        </div>
+      </section>
+
+      <footer className="cp-foot">
+        <div className="cp-wrap flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <Logo small />
+            <span className="text-[12px] font-medium">ContextPassport</span>
+          </div>
+          <span className="font-mono text-[11px] text-muted">
+            MV3 · LOCAL-ONLY · NO TELEMETRY
+          </span>
+        </div>
+      </footer>
 
       <style>{designStyles}</style>
     </div>
+  );
+}
+
+/* ------------------------------- bits ------------------------------- */
+
+function Logo({ small = false }: { small?: boolean }) {
+  const s = small ? 18 : 22;
+  const ic = small ? 11 : 14;
+  return (
+    <span className={small ? "cp-logo cp-logo-sm" : "cp-logo"} style={{ width: s, height: s }} aria-hidden>
+      <svg width={ic} height={ic} viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    </span>
   );
 }
 
@@ -316,6 +516,22 @@ function SectionLabel({ index, title }: { index: string; title: string }) {
     </div>
   );
 }
+
+function CompareCell({ v, gold = false }: { v: string | boolean; gold?: boolean }) {
+  if (v === true) {
+    return (
+      <span className={gold ? "cp-compare-check cp-compare-check-gold" : "cp-compare-check"}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path d="M3 8.5L6.5 12 13 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    );
+  }
+  if (v === false) return <span className="cp-compare-dash">—</span>;
+  return <span className={gold ? "cp-compare-val text-gold" : "cp-compare-val"}>{v}</span>;
+}
+
+/* ------------------------------- styles ------------------------------- */
 
 const designStyles = `
   .cp-root {
@@ -339,34 +555,41 @@ const designStyles = `
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.005em;
     background-image:
-      radial-gradient(1200px 600px at 50% -100px, rgba(99,102,241,0.08), transparent 60%),
-      linear-gradient(to bottom, rgba(255,255,255,0.012), transparent 200px);
+      radial-gradient(1200px 600px at 50% -200px, rgba(99,102,241,0.10), transparent 60%),
+      radial-gradient(800px 400px at 100% 10%, rgba(234,179,8,0.04), transparent 60%);
   }
   .cp-root .text-muted { color: var(--cp-muted); }
   .cp-root .text-fg { color: var(--cp-fg); }
+  .cp-root .text-gold { color: var(--cp-gold); }
   .cp-root .text-success { color: var(--cp-success); }
   .cp-root .text-danger { color: var(--cp-danger); }
+
+  .cp-wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  .cp-section { padding: 80px 0; border-top: 1px solid var(--cp-border); }
+  .cp-hero { padding: 72px 0 32px; }
+  @media (max-width: 640px) {
+    .cp-section { padding: 56px 0; }
+    .cp-hero { padding: 48px 0 24px; }
+  }
 
   /* === NAV === */
   .cp-nav {
     position: sticky; top: 0; z-index: 50;
-    backdrop-filter: saturate(140%) blur(8px);
+    backdrop-filter: saturate(140%) blur(10px);
     background: color-mix(in oklab, var(--cp-bg) 78%, transparent);
     border-bottom: 1px solid var(--cp-border);
   }
   .cp-nav-inner {
-    max-width: 680px; margin: 0 auto; padding: 12px 24px;
-    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1040px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
   .cp-logo {
-    width: 22px; height: 22px;
     display: inline-flex; align-items: center; justify-content: center;
     border-radius: 6px;
     background: color-mix(in oklab, var(--cp-primary) 14%, transparent);
     color: var(--cp-primary);
     border: 1px solid color-mix(in oklab, var(--cp-primary) 30%, transparent);
   }
-  .cp-logo-sm { width: 18px; height: 18px; border-radius: 5px; }
   .cp-version {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 10px; color: var(--cp-muted);
@@ -389,18 +612,19 @@ const designStyles = `
     letter-spacing: 0.16em;
   }
   .cp-h1 {
-    font-size: 48px; line-height: 1.04;
-    letter-spacing: -0.028em;
+    font-size: 60px; line-height: 1.02;
+    letter-spacing: -0.032em;
     font-weight: 600;
     text-wrap: balance;
+    max-width: 820px;
   }
   @media (max-width: 640px) {
-    .cp-h1 { font-size: 36px; letter-spacing: -0.025em; }
+    .cp-h1 { font-size: 38px; letter-spacing: -0.025em; }
   }
   .cp-lede {
     margin-top: 22px;
-    max-width: 560px;
-    font-size: 15px; line-height: 1.6;
+    max-width: 620px;
+    font-size: 16px; line-height: 1.6;
     color: var(--cp-fg-2);
   }
   .cp-dot {
@@ -408,21 +632,35 @@ const designStyles = `
     background: var(--cp-success);
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--cp-success) 18%, transparent);
   }
+  .cp-dot-mini {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--cp-muted);
+    display: inline-block;
+  }
+  .cp-trust {
+    list-style: none; padding: 0; margin: 28px 0 0;
+    display: flex; flex-wrap: wrap; gap: 14px;
+    font-size: 12px; color: var(--cp-muted);
+  }
+  .cp-trust li { display: inline-flex; align-items: center; gap: 7px; }
 
   /* === BUTTONS === */
-  .cp-btn-primary, .cp-btn-ghost {
-    display: inline-flex; align-items: center; gap: 8px;
+  .cp-btn-primary, .cp-btn-ghost, .cp-btn-gold {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     height: 36px; padding: 0 14px;
     border-radius: 8px;
     font-size: 13px; font-weight: 500;
     letter-spacing: -0.005em;
-    transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, color 160ms ease;
-    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, color 160ms ease, box-shadow 160ms ease;
+    cursor: pointer; white-space: nowrap;
   }
+  .cp-btn-sm { height: 30px; padding: 0 11px; font-size: 12px; }
+  .cp-btn-full { width: 100%; }
+  .cp-btn-inline { height: 36px; }
   .cp-btn-primary {
     background: var(--cp-primary); color: white;
     border: 1px solid color-mix(in oklab, var(--cp-primary) 70%, white 25%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 6px 20px -8px rgba(99,102,241,0.6);
   }
   .cp-btn-primary:hover { background: color-mix(in oklab, var(--cp-primary) 88%, white 12%); }
   .cp-btn-primary:active { transform: translateY(0.5px); }
@@ -434,22 +672,14 @@ const designStyles = `
   }
   .cp-btn-ghost:hover { background: var(--cp-card); border-color: var(--cp-border-2); }
   .cp-btn-ghost:active { transform: translateY(0.5px); }
-
-  .cp-kbd {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10px;
-    padding: 2px 5px;
-    border-radius: 4px;
-    background: rgba(255,255,255,0.10);
-    color: rgba(255,255,255,0.85);
-    border: 1px solid rgba(255,255,255,0.06);
-    letter-spacing: 0;
-    line-height: 1;
+  .cp-btn-gold {
+    background: var(--cp-gold); color: #1a1305;
+    border: 1px solid color-mix(in oklab, var(--cp-gold) 70%, white 25%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 22px -8px rgba(234,179,8,0.55);
+    font-weight: 600; width: 100%;
   }
-  .cp-btn-ghost .cp-kbd {
-    background: var(--cp-card); color: var(--cp-muted);
-    border-color: var(--cp-border);
-  }
+  .cp-btn-gold:hover { background: color-mix(in oklab, var(--cp-gold) 90%, white 10%); }
+  .cp-btn-gold:active { transform: translateY(0.5px); }
 
   .cp-spinner {
     width: 12px; height: 12px;
@@ -474,27 +704,26 @@ const designStyles = `
     letter-spacing: 0.04em;
   }
   .cp-h2 {
-    font-size: 18px; font-weight: 600;
-    letter-spacing: -0.018em;
+    font-size: 24px; font-weight: 600;
+    letter-spacing: -0.022em;
   }
   .cp-section-rule {
     flex: 1; height: 1px;
     background: linear-gradient(to right, var(--cp-border), transparent);
   }
   .cp-section-lede {
-    margin: 6px 0 24px;
-    font-size: 13.5px; color: var(--cp-muted);
-    max-width: 480px;
+    margin: 8px 0 28px;
+    font-size: 14.5px; color: var(--cp-muted);
+    max-width: 560px;
   }
 
   /* === PASSPORT PREVIEW === */
   .cp-passport {
-    margin-top: 18px;
     border: 1px solid var(--cp-border);
     border-radius: 12px;
     background: var(--cp-bg-2);
     overflow: hidden;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 12px 40px -12px rgba(0,0,0,0.6);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 24px 60px -20px rgba(0,0,0,0.7);
   }
   .cp-passport-head {
     display: flex; align-items: center; gap: 12px;
@@ -534,7 +763,7 @@ const designStyles = `
   }
   .cp-passport-row:last-child { border-bottom: 0; }
 
-  /* === GRID / CELLS === */
+  /* === GRID === */
   .cp-grid {
     list-style: none; padding: 0; margin: 0;
     display: grid; grid-template-columns: 1fr;
@@ -544,12 +773,11 @@ const designStyles = `
     border-radius: 10px;
     overflow: hidden;
   }
-  @media (min-width: 640px) {
-    .cp-grid { grid-template-columns: 1fr 1fr; }
-  }
+  @media (min-width: 640px) { .cp-grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 960px) { .cp-grid { grid-template-columns: 1fr 1fr 1fr; } }
   .cp-cell {
     background: var(--cp-bg);
-    padding: 18px 18px 20px;
+    padding: 20px 20px 22px;
     transition: background 160ms ease;
     position: relative;
   }
@@ -560,62 +788,50 @@ const designStyles = `
     letter-spacing: 0.04em;
   }
   .cp-cell-title {
-    margin: 4px 0 0; font-size: 14px; font-weight: 500;
+    margin: 6px 0 0; font-size: 14.5px; font-weight: 500;
     letter-spacing: -0.012em;
   }
   .cp-cell-body {
-    margin: 4px 0 0; font-size: 12.5px; color: var(--cp-muted);
+    margin: 6px 0 0; font-size: 13px; color: var(--cp-muted);
     line-height: 1.55;
   }
 
-  /* === TABLE (modes) === */
-  .cp-table {
+  /* === FLOW === */
+  .cp-flow {
     list-style: none; padding: 0; margin: 0;
     border: 1px solid var(--cp-border);
     border-radius: 10px;
     overflow: hidden;
     background: var(--cp-bg);
   }
-  .cp-tr {
+  .cp-flow-row {
     display: grid;
-    grid-template-columns: 36px minmax(120px, 1fr) 2fr;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center; gap: 16px;
+    padding: 18px 18px;
     border-bottom: 1px solid var(--cp-border);
     transition: background 160ms ease;
   }
-  .cp-tr:last-child { border-bottom: 0; }
-  .cp-tr:hover { background: var(--cp-surface); }
-  .cp-td-num {
+  .cp-flow-row:last-child { border-bottom: 0; }
+  .cp-flow-row:hover { background: var(--cp-surface); }
+  .cp-flow-num {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px; color: var(--cp-muted);
-  }
-  .cp-td-name {
-    font-size: 13.5px; font-weight: 500;
-    display: inline-flex; align-items: center; gap: 8px;
-    letter-spacing: -0.01em;
-  }
-  .cp-td-desc { font-size: 12.5px; color: var(--cp-muted); }
-  .cp-chip-gold {
-    display: inline-flex; align-items: center;
-    height: 17px; padding: 0 6px;
+    padding: 3px 7px;
+    border: 1px solid var(--cp-border);
     border-radius: 4px;
-    font-size: 9.5px; font-weight: 600;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    background: color-mix(in oklab, var(--cp-gold) 14%, transparent);
-    color: var(--cp-gold);
-    border: 1px solid color-mix(in oklab, var(--cp-gold) 32%, transparent);
+    width: fit-content;
   }
+  .cp-flow-arrow { color: var(--cp-muted); font-size: 16px; }
+  .cp-step-title { margin: 0; font-size: 14.5px; font-weight: 500; letter-spacing: -0.012em; }
+  .cp-step-body { margin: 4px 0 0; font-size: 13px; color: var(--cp-muted); line-height: 1.55; }
 
   /* === PROVIDERS === */
   .cp-providers {
-    list-style: none; padding: 0; margin: 18px 0 0;
+    list-style: none; padding: 0; margin: 8px 0 0;
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
   }
-  @media (min-width: 640px) {
-    .cp-providers { grid-template-columns: repeat(4, 1fr); }
-  }
+  @media (min-width: 640px) { .cp-providers { grid-template-columns: repeat(4, 1fr); } }
   .cp-provider {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 12px;
@@ -632,57 +848,187 @@ const designStyles = `
     box-shadow: 0 0 0 2.5px color-mix(in oklab, var(--cp-success) 18%, transparent);
   }
 
-  /* === STEPS === */
-  .cp-steps { list-style: none; padding: 0; margin: 18px 0 0; }
-  .cp-step-row {
-    display: grid; grid-template-columns: 36px 1fr; gap: 16px;
-    padding: 16px 0;
-    border-bottom: 1px solid var(--cp-border);
-    align-items: start;
+  /* === QUOTES === */
+  .cp-quotes {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; grid-template-columns: 1fr; gap: 12px;
   }
-  .cp-step-row:last-child { border-bottom: 0; }
-  .cp-step-num {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px; color: var(--cp-muted);
-    padding: 2px 6px;
+  @media (min-width: 880px) { .cp-quotes { grid-template-columns: 1fr 1fr 1fr; } }
+  .cp-quote {
+    background: var(--cp-bg-2);
     border: 1px solid var(--cp-border);
-    border-radius: 4px;
-    width: fit-content;
-    letter-spacing: 0.04em;
+    border-radius: 10px;
+    padding: 20px 20px 18px;
   }
-  .cp-step-title {
-    margin: 0; font-size: 14px; font-weight: 500;
-    letter-spacing: -0.012em;
+  .cp-quote-text {
+    margin: 0 0 14px;
+    font-size: 14px; line-height: 1.55;
+    color: var(--cp-fg);
+    letter-spacing: -0.008em;
   }
-  .cp-step-body {
-    margin: 4px 0 0; font-size: 12.5px;
-    color: var(--cp-muted); line-height: 1.6;
-  }
+  .cp-quote-attr { margin: 0; font-size: 12px; }
 
-  /* === INSTALL === */
-  .cp-install { list-style: none; padding: 0; margin: 18px 0 0; }
-  .cp-install li {
-    display: grid; grid-template-columns: 36px 1fr; gap: 14px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--cp-border);
-    font-size: 13px; color: var(--cp-fg-2);
+  /* === PRICING === */
+  .cp-plans {
+    list-style: none; padding: 0; margin: 0;
+    display: grid; grid-template-columns: 1fr; gap: 16px;
+  }
+  @media (min-width: 880px) { .cp-plans { grid-template-columns: 1fr 1fr 1fr; align-items: stretch; } }
+  .cp-plan {
+    position: relative;
+    background: var(--cp-bg-2);
+    border: 1px solid var(--cp-border);
+    border-radius: 14px;
+    padding: 24px 22px 22px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .cp-plan-gold {
+    border-color: color-mix(in oklab, var(--cp-gold) 50%, var(--cp-border));
+    background:
+      radial-gradient(400px 200px at 50% -50px, rgba(234,179,8,0.10), transparent 60%),
+      var(--cp-bg-2);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--cp-gold) 22%, transparent), 0 24px 60px -28px rgba(234,179,8,0.35);
+  }
+  .cp-plan-ribbon {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--cp-gold); color: #1a1305;
+    box-shadow: 0 4px 14px -4px rgba(234,179,8,0.55);
+  }
+  .cp-plan-head { border-bottom: 1px solid var(--cp-border); padding-bottom: 16px; }
+  .cp-plan-tag {
+    margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px; color: var(--cp-muted);
+    text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .cp-plan-name { margin: 6px 0 12px; font-size: 18px; font-weight: 600; letter-spacing: -0.015em; }
+  .cp-plan-price { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+  .cp-plan-amount { font-size: 36px; font-weight: 600; letter-spacing: -0.028em; }
+  .cp-plan-gold .cp-plan-amount { color: var(--cp-gold); }
+  .cp-plan-cadence { font-size: 13px; color: var(--cp-muted); }
+  .cp-plan-features {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    flex: 1;
+  }
+  .cp-plan-features li {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; color: var(--cp-fg-2); line-height: 1.5;
+  }
+  .cp-plan-features svg { color: var(--cp-success); margin-top: 3px; flex: none; }
+  .cp-plan-gold .cp-plan-features svg { color: var(--cp-gold); }
+
+  /* === COMPARE === */
+  .cp-compare {
+    margin-top: 36px;
+    border: 1px solid var(--cp-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--cp-bg-2);
+  }
+  .cp-compare-head, .cp-compare-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 14px 18px;
     align-items: center;
   }
-  .cp-install li:last-child { border-bottom: 0; }
-  .cp-code {
+  .cp-compare-head {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11.5px;
-    padding: 1.5px 6px;
-    background: var(--cp-card);
-    border: 1px solid var(--cp-border);
-    border-radius: 4px;
-    color: var(--cp-fg);
+    font-size: 10.5px; color: var(--cp-muted);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    background: var(--cp-surface);
+    border-bottom: 1px solid var(--cp-border);
   }
+  .cp-compare-head > :not(:first-child) { text-align: center; }
+  .cp-compare-row {
+    border-bottom: 1px solid var(--cp-border);
+    font-size: 13px;
+  }
+  .cp-compare-row:last-child { border-bottom: 0; }
+  .cp-compare-row > :not(:first-child) { text-align: center; }
+  .cp-compare-label { color: var(--cp-fg-2); }
+  .cp-compare-check {
+    display: inline-flex; width: 22px; height: 22px;
+    align-items: center; justify-content: center;
+    border-radius: 6px;
+    background: color-mix(in oklab, var(--cp-success) 14%, transparent);
+    color: var(--cp-success);
+    border: 1px solid color-mix(in oklab, var(--cp-success) 30%, transparent);
+  }
+  .cp-compare-check-gold {
+    background: color-mix(in oklab, var(--cp-gold) 16%, transparent);
+    color: var(--cp-gold);
+    border-color: color-mix(in oklab, var(--cp-gold) 36%, transparent);
+  }
+  .cp-compare-dash { color: var(--cp-muted); }
+  .cp-compare-val { color: var(--cp-fg); font-size: 12.5px; }
+  @media (max-width: 720px) {
+    .cp-compare-head, .cp-compare-row {
+      grid-template-columns: 1.4fr 1fr 1fr 1fr;
+      padding: 12px 12px;
+      gap: 6px;
+      font-size: 12px;
+    }
+  }
+
+  /* === FAQ === */
+  .cp-faq { list-style: none; padding: 0; margin: 0;
+    border: 1px solid var(--cp-border); border-radius: 12px;
+    background: var(--cp-bg-2); overflow: hidden;
+  }
+  .cp-faq li { border-bottom: 1px solid var(--cp-border); }
+  .cp-faq li:last-child { border-bottom: 0; }
+  .cp-faq-item summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 18px 20px;
+    cursor: pointer;
+    font-size: 14px; font-weight: 500;
+    letter-spacing: -0.01em;
+    list-style: none;
+    transition: background 160ms ease;
+  }
+  .cp-faq-item summary::-webkit-details-marker { display: none; }
+  .cp-faq-item summary:hover { background: var(--cp-surface); }
+  .cp-faq-icon {
+    color: var(--cp-muted); font-size: 18px; line-height: 1;
+    transition: transform 200ms ease, color 160ms ease;
+  }
+  .cp-faq-item[open] .cp-faq-icon { transform: rotate(45deg); color: var(--cp-fg); }
+  .cp-faq-item p {
+    margin: 0; padding: 0 20px 20px;
+    font-size: 13.5px; color: var(--cp-muted); line-height: 1.6;
+    max-width: 720px;
+  }
+
+  /* === CTA === */
+  .cp-cta {
+    border: 1px solid var(--cp-border);
+    border-radius: 16px;
+    padding: 48px 32px;
+    background:
+      radial-gradient(600px 240px at 50% 0%, rgba(99,102,241,0.14), transparent 60%),
+      var(--cp-bg-2);
+    text-align: center;
+  }
+  .cp-cta-h {
+    margin: 4px auto 12px;
+    font-size: 36px; font-weight: 600;
+    letter-spacing: -0.025em;
+    max-width: 640px;
+    text-wrap: balance;
+  }
+  @media (max-width: 640px) { .cp-cta-h { font-size: 28px; } .cp-cta { padding: 36px 20px; } }
+  .cp-cta-sub { margin: 0; font-size: 14.5px; color: var(--cp-muted); }
+  .cp-cta .flex { justify-content: center; }
 
   /* === FOOTER === */
   .cp-foot {
     border-top: 1px solid var(--cp-border);
-    padding: 24px 0 56px;
+    padding: 28px 0 56px;
     color: var(--cp-muted);
     font-size: 12px;
   }
