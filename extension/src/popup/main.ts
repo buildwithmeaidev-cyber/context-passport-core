@@ -11,6 +11,11 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   const continuity = container.resolve(Tokens.Continuity);
   const storage = container.resolve(Tokens.Storage);
   const health = container.resolve(Tokens.Health);
+  const flags = container.resolve(Tokens.Flags);
+
+  // ===== Privacy panel + onboarding =====
+  await wirePrivacyPanel(flags);
+  await maybeShowOnboarding(storage);
 
   const providerBadge = document.getElementById("cp-provider") as HTMLSpanElement;
   let activeProviderId: string | null = null;
