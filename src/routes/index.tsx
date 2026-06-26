@@ -59,11 +59,29 @@ const TESTIMONIALS = [
 ];
 
 const FAQS = [
-  { q: "Where does my data live?", a: "Locally, in your browser's extension storage. No backend, no account, no telemetry. The extension never makes outbound network requests with your conversations." },
-  { q: "Which AI tools are supported?", a: "ChatGPT, Claude, Gemini, and Perplexity at launch. More adapters are added as the API surfaces stabilize." },
-  { q: "How is this different from copy-paste?", a: "ContextPassport extracts the structured shape of your project — goals, decisions, constraints, next actions — and renders it in a format the receiving AI is tuned to honor. Copy-paste gives you a transcript. We give you a working context." },
-  { q: "What does Founder Lifetime include?", a: "Everything in Pro, forever, with no recurring charge. Plus the Founder Handoff mode tuned for problem · market · revenue model · validation · risks, and early access to new providers." },
-  { q: "Can I cancel anytime?", a: "Pro is monthly with no commitment. Founder is a one-time payment — there's nothing to cancel." },
+  { q: "What is ContextPassport?", a: "A free Chrome extension that lets you move your AI conversations between ChatGPT, Claude, Gemini, and Perplexity — so you don't have to start over every time you switch tools." },
+  { q: "Why would I need it?", a: "Long projects don't fit in one chat. You hit context limits, switch models, lose decisions, repeat yourself. ContextPassport keeps the project — goals, decisions, progress, next steps — so any AI can pick it up." },
+  { q: "How does it work?", a: "Open any supported AI tab and click Capture. The extension reads what's on screen and saves a short, structured summary on your device. Open another AI, click Continue, and the summary is pasted in for you. That's it." },
+  { q: "Is my data safe? Is anything uploaded?", a: "Nothing is uploaded — ever. Everything stays in your browser, on your device. There is no server that sees your conversations. You can verify in DevTools → Network: the extension makes zero outbound requests with your data." },
+  { q: "What happens when I click Capture?", a: "The extension reads the conversation visible on the page, structures it into goals / decisions / progress / next actions, and saves it to your browser's local storage. No API calls. Nothing sent anywhere." },
+  { q: "What happens when I click Continue?", a: "Your saved summary is formatted for the AI you're currently on and pasted into its message box. You review it, then press Send yourself. Nothing is sent automatically." },
+  { q: "Why does the extension need permissions?", a: "‘Read AI websites’ lets it see the conversation on the page. ‘Storage’ lets it save summaries on your device. ‘Clipboard’ lets it paste the summary into the next AI. Nothing else. No tracking, no analytics." },
+  { q: "Can I turn off storage or pasting?", a: "Yes. The popup's Privacy panel can disable local storage or copy/paste at any time. The options page has a one-click ‘Erase all local data’." },
+  { q: "Which AI tools are supported?", a: "ChatGPT, Claude, Gemini, and Perplexity at launch. More are added as their pages stabilize." },
+  { q: "What does Founder Lifetime include?", a: "Everything in Pro, forever, no recurring charge. Plus the Founder Handoff mode and early access to new providers." },
+];
+
+const PRIVACY_CARDS = [
+  { i: "🔒", t: "Local-first", b: "Every conversation summary is stored on your device, in your browser. Nowhere else." },
+  { i: "☁️", t: "No cloud storage", b: "Your conversations never pass through our servers. We don't have any." },
+  { i: "👀", t: "No tracking", b: "No analytics, no telemetry, no account. We do not read, analyze, or sell your data." },
+  { i: "🗑️", t: "Full control", b: "One-click erase all local data. Toggle off storage or paste at any time." },
+];
+
+const PERMISSIONS = [
+  { t: "Read AI websites (activeTab + scripting)", b: "Needed to see the conversation on the page when you click Capture. Only runs on ChatGPT, Claude, Gemini, and Perplexity — and only when you trigger it." },
+  { t: "Storage", b: "Needed to save your project summaries locally on this device. Uses chrome.storage.local, never the cloud." },
+  { t: "Clipboard / page write", b: "Needed to paste a saved summary into the next AI's message box when you click Continue. You still review and press Send yourself." },
 ];
 
 const PLANS = [
