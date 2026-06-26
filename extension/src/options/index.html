@@ -11,6 +11,29 @@
       <h1>ContextPassport — Projects & Passport</h1>
 
       <section>
+        <h2>Privacy &amp; data handling</h2>
+        <div class="cp-facet">
+          <ul class="cp-pipeline">
+            <li><span class="cp-dot" data-state="on"></span><strong>Extract</strong> — facets are parsed from the page DOM of the AI tab you click on. No network request is made.</li>
+            <li><span class="cp-dot" data-state="on"></span><strong>Compress</strong> — the passport is rendered into the mode you pick, locally.</li>
+            <li><span class="cp-dot" id="cp-opt-dot-store" data-state="on"></span><strong>Store</strong> — saved in <code>chrome.storage.local</code> on this device only. Never transmitted.</li>
+            <li><span class="cp-dot" id="cp-opt-dot-inject" data-state="on"></span><strong>Copy / Inject</strong> — pasted into the active AI tab's composer only when you click. You always edit before sending.</li>
+          </ul>
+          <label class="cp-toggle">
+            <input type="checkbox" id="cp-opt-tog-storage" />
+            <span>Allow local storage of captures</span>
+          </label>
+          <label class="cp-toggle">
+            <input type="checkbox" id="cp-opt-tog-inject" />
+            <span>Allow copy / inject into pages</span>
+          </label>
+          <p class="cp-muted">0 outbound requests. Verify in DevTools → Network. Disabling storage stops new captures from being saved; existing data is preserved until you erase it.</p>
+          <button id="cp-erase-all" class="cp-btn" style="width:auto;margin-top:12px;color:var(--cp-danger);border-color:var(--cp-danger)">Erase all local data</button>
+          <p id="cp-erase-status" class="cp-muted"></p>
+        </div>
+      </section>
+
+      <section>
         <h2>Plan</h2>
         <p id="cp-plan" class="cp-muted"></p>
       </section>
