@@ -18,6 +18,7 @@ export class ProjectService {
   constructor(
     private readonly storage: StorageGateway,
     private readonly intelligence?: IntelligenceService,
+    private readonly flags?: { isEnabled(flag: string): boolean },
   ) {}
 
   async list(): Promise<Project[]> {
@@ -69,6 +70,9 @@ export class ProjectService {
    * domain-specific intelligence. The central continuity operation.
    */
   async ingestCapture(projectId: string, captured: CapturedConversation): Promise<Result<Project>> {
+    if (this.flags && !this.flags.isEnabled("privacy.allowLocalStorage")) {
+      return err(appError("FEATURE_DISABLED", "Local storage of captures is disabled in Privacy settings."));
+    }
     const project = await this.get(projectId);
     if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
 

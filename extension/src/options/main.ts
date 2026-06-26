@@ -9,10 +9,41 @@ import type { Project } from "@/storage/schema";
   const registry = container.resolve(Tokens.ProviderRegistry);
   const flags = container.resolve(Tokens.Flags);
   const projects = container.resolve(Tokens.Projects);
+  const storage = container.resolve(Tokens.Storage);
+
+  wirePrivacySection();
 
   const plan = license.plan();
   (document.getElementById("cp-plan") as HTMLElement).textContent =
     `${plan.label} · $${plan.monthlyPriceUsd}/mo · projects ${plan.limits.projectsMax || "unlimited"}`;
+
+  function wirePrivacySection(): void {
+    const togStore = document.getElementById("cp-opt-tog-storage") as HTMLInputElement;
+    const togInject = document.getElementById("cp-opt-tog-inject") as HTMLInputElement;
+    const dotStore = document.getElementById("cp-opt-dot-store") as HTMLSpanElement;
+    const dotInject = document.getElementById("cp-opt-dot-inject") as HTMLSpanElement;
+    const erase = document.getElementById("cp-erase-all") as HTMLButtonElement;
+    const eraseStatus = document.getElementById("cp-erase-status") as HTMLParagraphElement;
+    const sync = () => {
+      const s = flags.isEnabled("privacy.allowLocalStorage");
+      const i = flags.isEnabled("privacy.allowInjection");
+      togStore.checked = s;
+      togInject.checked = i;
+      dotStore.dataset.state = s ? "on" : "off";
+      dotInject.dataset.state = i ? "on" : "off";
+    };
+    sync();
+    togStore.addEventListener("change", async () => { await flags.set("privacy.allowLocalStorage", togStore.checked); sync(); });
+    togInject.addEventListener("change", async () => { await flags.set("privacy.allowInjection", togInject.checked); sync(); });
+    erase.addEventListener("click", async () => {
+      if (!confirm("Erase ALL ContextPassport data on this device? This cannot be undone.")) return;
+      await storage.remove("projects");
+      await storage.remove("settings:user");
+      await storage.remove("flags:overrides");
+      eraseStatus.textContent = "All local data erased. Reload the extension to reset state.";
+      eraseStatus.dataset.state = "success";
+    });
+  }
 
   let activeId: string | null = null;
   await renderAll();

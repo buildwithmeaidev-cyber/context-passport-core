@@ -17,9 +17,9 @@ export async function buildContainer(scope: string): Promise<Container> {
   c.register(Tokens.Storage, (x) => new StorageGateway(new ChromeLocalDriver(), x.resolve(Tokens.Logger)));
   c.register(Tokens.ProviderRegistry, () => createDefaultRegistry());
   c.register(Tokens.Intelligence, () => new IntelligenceService());
-  c.register(Tokens.Projects, (x) => new ProjectService(x.resolve(Tokens.Storage), x.resolve(Tokens.Intelligence)));
   c.register(Tokens.License, () => new LicenseService());
   c.register(Tokens.Flags, (x) => new FeatureFlagService(x.resolve(Tokens.Storage), x.resolve(Tokens.License)));
+  c.register(Tokens.Projects, (x) => new ProjectService(x.resolve(Tokens.Storage), x.resolve(Tokens.Intelligence), x.resolve(Tokens.Flags)));
   c.register(Tokens.Continuity, (x) => new ContinuityService(x.resolve(Tokens.License)));
   c.register(Tokens.Health, () => new ContextHealthService());
   c.register(Tokens.Memory, (x) => new ProjectMemoryService(x.resolve(Tokens.Storage)));

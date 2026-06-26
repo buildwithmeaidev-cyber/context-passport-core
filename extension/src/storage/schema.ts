@@ -141,6 +141,7 @@ export const schemas = {
     activeProjectId: z.string().nullable().default(null),
     defaultRenderMode: z.string().default("balanced"),
     theme: z.enum(["system", "light", "dark"]).default("system"),
+    onboardingSeenAt: z.number().nullable().default(null),
   }),
   "flags:overrides": z.record(z.string(), z.boolean()),
   "meta:schemaVersion": z.object({ version: z.number() }),

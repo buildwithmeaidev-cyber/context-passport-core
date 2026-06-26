@@ -1,122 +1,68 @@
+## Goal
 
-# ContextPassport AI — Build Plan
+Make it explicit and controllable what ContextPassport does with user data. Add a visible "Privacy & Data" status block (popup + options + first-run onboarding) and two functional toggles enforced by the relevant services.
 
-A Manifest V3 Chrome extension that lets users capture conversations from one AI site (ChatGPT, Claude, Gemini), store them in a local versioned vault, compress/optimize them locally, and inject the result into another AI site. All logic runs locally — no backend, no LLM API calls.
+## What the user will see
 
-The plan optimizes for long-term maintainability: strict TS, feature-based folders, provider adapters behind an interface, DI container, versioned storage with migrations, and a feature-flag service so pricing/premium modes can be toggled later without touching feature code.
+1. **Popup — collapsible "Privacy & data" panel** (above the footer)
+   - Four short status lines, each with a check icon:
+     - *Extract* — facets parsed locally from the page DOM (no network call).
+     - *Compress* — passport rendered locally into the chosen mode.
+     - *Store* — saved in `chrome.storage.local` on this device only.
+     - *Copy/Inject* — only on your click; pasted into the active AI tab's composer.
+   - Two toggles:
+     - **Allow local storage of captures** (default on)
+     - **Allow copy / inject into pages** (default on)
+   - Link: "Open full privacy details" → options page section.
 
-## Deliverables
+2. **Options page — new "Privacy & data handling" section** at the top
+   - Same toggles, plus longer explanations for each pipeline stage.
+   - "Erase all local data" button (wipes `projects`, `settings:user`, `flags:overrides` via StorageGateway).
+   - Network surface statement: "0 outbound requests. Verify in DevTools → Network."
 
-1. Chrome Extension MV3 (TypeScript strict) built with Vite, packaged to `public/contextpassport.zip`.
-2. A small landing page (existing TanStack Start app) with a download button + install instructions.
-3. Architecture, storage-schema, and update-strategy docs in `extension/docs/`.
+3. **First-run onboarding modal** (popup, shown once)
+   - Triggered when `settings:user.onboardingSeenAt` is missing.
+   - 1-screen summary of the 4 pipeline stages + the 2 toggles, "Got it" dismiss.
+   - Persists `onboardingSeenAt` timestamp so it never re-appears.
 
-## Folder structure
+## Behavior of the two toggles
 
-```text
-extension/
-  manifest.json
-  src/
-    core/                  # DI container, result/error types, logger, event bus, types
-      container.ts
-      logger.ts
-      events.ts
-      result.ts
-      types.ts
-    providers/             # One adapter per AI site, all implement ProviderAdapter
-      ProviderAdapter.ts   # interface contract
-      registry.ts          # host->adapter resolution
-      chatgpt/
-      claude/
-      gemini/
-    services/              # Pure business logic, no DOM, no UI
-      capture/             # extract conversation via active adapter
-      compression/         # CompressionMode strategy registry (none|dedupe|summary-heuristic|aggressive)
-      injection/           # inject text via active adapter
-      vault/               # CRUD over storage, search, tagging
-      license/             # premium gating; today returns "free" tier, future-ready
-      pricing/             # PricingPlan registry (config-driven, no code changes to add tiers)
-    storage/               # Versioned storage gateway
-      schema.ts            # zod schemas per version
-      migrations/          # v1->v2->... pure functions
-      StorageGateway.ts    # get/set with migration on read, namespaced keys
-      index.ts
-    features/              # Feature-based slices; UI + feature hooks only, NO business logic
-      capture/
-      vault-browser/
-      injector/
-      settings/
-      premium-upsell/
-    shared/                # cross-cutting utils (dom helpers, debounce, ids)
-    ui/                    # presentational components + design tokens, no logic
-      components/
-      tokens.css
-    background/            # MV3 service worker entry; wires DI container
-      index.ts
-    content/               # content-script entry; resolves adapter, exposes bridge
-      index.ts
-    popup/                 # popup entry (React), composes features
-      index.html
-      main.tsx
-    options/               # options page entry
-      index.html
-      main.tsx
-  tests/                   # vitest; unit tests per service + adapter contract tests
-  docs/
-    ARCHITECTURE.md
-    STORAGE_SCHEMA.md
-    UPDATE_STRATEGY.md
-  vite.config.ts
-  tsconfig.json            # strict: true, noUncheckedIndexedAccess, exactOptionalPropertyTypes
-```
+- `privacy.allowLocalStorage` (default `true`)
+  - When `false`: `ProjectService.ingestCapture` and any passport write short-circuits and returns a typed `FEATURE_DISABLED` error surfaced in the existing capture status line. Already-stored data is left intact (the user can erase explicitly).
+- `privacy.allowInjection` (default `true`)
+  - When `false`: `InjectionService.inject` and the popup's "Continue here" button refuse with a clear message; the rendered text is still shown so the user can manually copy if they want.
 
-## Key architectural rules (enforced in code + docs)
+Both toggles route through the existing `FeatureFlagService` (no new storage namespace; uses `flags:overrides`). Defaults added to the `FeatureFlagService` defaults map.
 
-- **DI container** (`core/container.ts`): tiny token-based registry. Background worker constructs the container and wires concrete services; popup/content scripts receive interfaces only. No service imports another concrete service directly.
-- **Provider adapter contract** (`ProviderAdapter`): `id`, `matches(url)`, `detect()`, `extractConversation()`, `injectPrompt(text)`, `capabilities`. Adding a provider = new folder + register in `providers/registry.ts`. Nothing else changes.
-- **Compression strategy registry**: each mode implements `CompressionStrategy { id, label, premium, run(input): Output }`. Adding a mode = new file + register. UI lists modes from the registry, gated by `LicenseService.can(modeId)`.
-- **Pricing / feature flags**: `pricing/plans.ts` is a data file mapping `planId -> { features[], compressionModes[], price }`. `FeatureFlagService` resolves `isEnabled(flag)` from (a) local config, (b) license tier, (c) user override. UI never hardcodes "isPremium".
-- **Versioned storage**: every write tagged with `__v`. On read, `StorageGateway` runs sequential migrations to current version. Schemas validated with zod; invalid data quarantined, never silently dropped.
-- **No business logic in UI**: features call services via injected hooks (`useService(Token)`). Lint rule + code review checklist documented in ARCHITECTURE.md. Components are pure render + event dispatch.
-- **Result type**: services return `Result<T, AppError>` instead of throwing across boundaries; UI maps errors to user-visible messages in one place.
-- **Reliability**: adapter contract tests run against recorded HTML fixtures so a site DOM change fails tests before shipping. Storage migrations have round-trip tests. CI-style script `bun test` runs all of it.
+## Storage changes
 
-## Providers at v1
+- Extend `settings:user` schema with `onboardingSeenAt: number | null` (default `null`). No version bump needed — Zod default keeps existing data valid; the schema's `default(null)` handles forward compatibility on read.
+- No new keys, no new migration.
 
-ChatGPT, Claude, Gemini adapters — each minimal but real (extract last N turns, inject into composer). The adapter interface is the stable contract; sites change often, so adapters are the only churn surface.
+## Files to add / edit
 
-## Compression modes at v1 (all local, no LLM)
+**Edit**
+- `extension/src/services/license/FeatureFlagService.ts` — add `privacy.allowLocalStorage` and `privacy.allowInjection` defaults.
+- `extension/src/services/project/ProjectService.ts` — gate `ingestCapture` on `privacy.allowLocalStorage`.
+- `extension/src/services/injection/InjectionService.ts` — gate `inject` on `privacy.allowInjection`.
+- `extension/src/storage/schema.ts` — add `onboardingSeenAt` to `settings:user`.
+- `extension/src/popup/index.html` — add Privacy panel + onboarding modal markup.
+- `extension/src/popup/main.ts` — wire panel toggles, render statuses, show/dismiss onboarding.
+- `extension/src/options/index.html` — add Privacy section markup.
+- `extension/src/options/main.ts` — wire toggles + "Erase all local data".
+- `extension/src/ui/tokens.css` — minimal styles for the panel, toggle row, modal backdrop, status dots (reuse existing tokens, no new colors).
+- `extension/docs/STORAGE_SCHEMA.md` — document the two new flag keys and `onboardingSeenAt`.
+- `extension/docs/STORE_LISTING.md` — note the in-product privacy panel under "Privacy practices".
 
-- `none` (free)
-- `dedupe` — collapse repeated turns / quoted blocks (free)
-- `summarize-heuristic` — sentence-rank + keep code blocks verbatim (free)
-- `aggressive` — heuristic + drop low-signal turns, hard token cap (marked premium in pricing config; gate is a one-line flag flip)
+**No new files required** — feature lives inside existing popup/options slices.
 
-## Storage schema (v1)
+## Verification
 
-Namespaces: `vault:conversations`, `vault:index`, `settings:user`, `flags:overrides`, `meta:schemaVersion`. Full field-level schema, indexes, and quota strategy live in `STORAGE_SCHEMA.md`.
+- `bunx vitest run` — existing 37 tests still pass.
+- Manual: open popup, toggle "Allow local storage" off, click Capture → expect "Storage disabled" message and no project change. Toggle "Allow copy/inject" off, click Continue here → expect refusal, rendered text still visible.
+- Repackage `public/contextpassport.zip` via the existing `extension/build.mjs` flow.
 
-## Update strategy (summary, full doc in UPDATE_STRATEGY.md)
+## Out of scope
 
-- SemVer in `manifest.json`. Background worker runs `runMigrations(fromVersion, toVersion)` on `chrome.runtime.onInstalled` with reason `update`.
-- Adapter changes ship behind a `providers.<id>.enabled` flag so a broken adapter can be remotely-disabled via a settings toggle without re-uploading.
-- Rollback: storage migrations are forward-only; previous schema kept in `meta:backup:<version>` for one major version.
-- Distribution: zipped unpacked build in `public/contextpassport.zip` for sideload now; Web Store listing later (same build pipeline).
-
-## Landing page (existing TanStack app)
-
-Replace `src/routes/index.tsx` placeholder with a single page: product blurb, "Download extension" button (blob-fetch pattern), and the 4-step unpacked-install instructions. No backend, no auth.
-
-## Out of scope (explicitly)
-
-- No backend, no Lovable Cloud, no auth, no payments wiring (pricing is config only).
-- No LLM API calls from the extension.
-- No Web Store submission automation.
-
-## Acceptance checklist
-
-- `bun run build` produces `extension/dist` and `public/contextpassport.zip`.
-- Loading the unpacked extension in Chrome shows the popup; capture on chatgpt.com, switch to claude.ai, inject works end-to-end.
-- Adding a fake 4th provider requires only a new folder + 1 registry line (verified by writing one in tests).
-- Bumping schema to v2 with a migration passes round-trip tests and does not lose v1 data.
-- All three docs exist and match the code.
+- No remote sync, no cloud erase, no export-to-file (can be a follow-up).
+- No changes to provider adapters or intelligence engine.

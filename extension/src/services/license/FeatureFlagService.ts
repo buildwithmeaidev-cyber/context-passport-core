@@ -19,6 +19,8 @@ export class FeatureFlagService {
       "providers.claude.enabled": true,
       "providers.gemini.enabled": true,
       "ui.showPremiumUpsell": true,
+      "privacy.allowLocalStorage": true,
+      "privacy.allowInjection": true,
     },
   ) {}
 

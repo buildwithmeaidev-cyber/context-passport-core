@@ -9,6 +9,9 @@ export class InjectionService {
   ) {}
 
   inject(url: string, text: string): Result<true> {
+    if (!this.flags.isEnabled("privacy.allowInjection")) {
+      return err(appError("FEATURE_DISABLED", "Copy/inject is disabled in Privacy settings."));
+    }
     const adapter = this.registry.resolveByUrl(url);
     if (!adapter) return err(appError("ADAPTER_NOT_FOUND", `No adapter for ${url}`));
     if (!this.flags.isEnabled(`providers.${adapter.id}.enabled`)) {

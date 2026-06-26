@@ -7,6 +7,21 @@
     <link rel="stylesheet" href="tokens.css" />
   </head>
   <body class="cp-popup">
+    <!-- First-run onboarding modal -->
+    <div id="cp-onboarding" class="cp-modal-backdrop" hidden>
+      <div class="cp-modal" role="dialog" aria-labelledby="cp-onb-title">
+        <h2 id="cp-onb-title">How ContextPassport handles your data</h2>
+        <ol class="cp-onb-list">
+          <li><strong>Extract</strong> — reads the open AI chat from the page DOM. No network call.</li>
+          <li><strong>Compress</strong> — structures it into goals, decisions, progress, next actions, locally.</li>
+          <li><strong>Store</strong> — saves on this device in <code>chrome.storage.local</code> only.</li>
+          <li><strong>Copy / Inject</strong> — pasted into another AI tab only when <em>you</em> click.</li>
+        </ol>
+        <p class="cp-muted">You can switch off local storage or copy/inject any time in the Privacy panel below.</p>
+        <button id="cp-onb-dismiss" class="cp-btn cp-btn-primary">Got it</button>
+      </div>
+    </div>
+
     <header class="cp-header">
       <h1>ContextPassport</h1>
       <span id="cp-provider" class="cp-badge">detecting…</span>
@@ -38,6 +53,30 @@
       <button id="cp-inject" class="cp-btn">Render passport → inject into current tab</button>
       <p id="cp-inject-status" class="cp-muted"></p>
     </section>
+
+    <!-- Privacy & data panel -->
+    <details class="cp-section cp-privacy" id="cp-privacy">
+      <summary>
+        <span class="cp-label" style="margin:0">Privacy &amp; data</span>
+        <span class="cp-badge" data-state="good" id="cp-privacy-badge">Local only</span>
+      </summary>
+      <ul class="cp-pipeline">
+        <li><span class="cp-dot" data-state="on"></span><strong>Extract</strong> — parsed from page DOM, no network call.</li>
+        <li><span class="cp-dot" data-state="on"></span><strong>Compress</strong> — passport rendered locally.</li>
+        <li><span class="cp-dot" id="cp-dot-store" data-state="on"></span><strong>Store</strong> — <code>chrome.storage.local</code> on this device.</li>
+        <li><span class="cp-dot" id="cp-dot-inject" data-state="on"></span><strong>Copy / Inject</strong> — only when you click.</li>
+      </ul>
+      <label class="cp-toggle">
+        <input type="checkbox" id="cp-tog-storage" />
+        <span>Allow local storage of captures</span>
+      </label>
+      <label class="cp-toggle">
+        <input type="checkbox" id="cp-tog-inject" />
+        <span>Allow copy / inject into pages</span>
+      </label>
+      <p class="cp-muted">0 outbound requests. Verify in DevTools → Network.</p>
+      <a href="#" id="cp-privacy-more" class="cp-link">Open full privacy details →</a>
+    </details>
 
     <footer class="cp-footer">
       <a href="#" id="cp-options">Manage projects, memory & passport</a>
