@@ -16,13 +16,13 @@ export function renderCapture(deps: CaptureViewDeps): void {
       return;
     }
     deps.button.disabled = true;
-    deps.status.textContent = "Capturing and extracting facets…";
+    deps.status.textContent = "Reading this page locally…";
     try {
       await deps.onCapture(projectId);
       await deps.afterCapture();
-      deps.status.textContent = "Captured. Passport updated.";
+      deps.status.textContent = "✓ Conversation captured. Saved locally. Ready to continue in another AI.";
     } catch (e) {
-      deps.status.textContent = `Failed: ${e instanceof Error ? e.message : String(e)}`;
+      deps.status.textContent = `Couldn't capture: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       deps.button.disabled = false;
     }
