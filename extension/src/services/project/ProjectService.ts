@@ -18,6 +18,7 @@ export class ProjectService {
   constructor(
     private readonly storage: StorageGateway,
     private readonly intelligence?: IntelligenceService,
+    private readonly flags?: { isEnabled(flag: string): boolean },
   ) {}
 
   async list(): Promise<Project[]> {
