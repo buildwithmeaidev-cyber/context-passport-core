@@ -43,7 +43,11 @@ export async function renderProjectPicker(deps: ProjectPickerDeps): Promise<Proj
       return;
     }
     const items = passportItemCount(p.passport);
-    deps.stats.textContent = `${items} passport item${items === 1 ? "" : "s"} · ${p.captures.length} capture${p.captures.length === 1 ? "" : "s"}.`;
+    if (p.captures.length === 0) {
+      deps.stats.textContent = "No captures yet. Open an AI chat (ChatGPT, Claude, Gemini, or Perplexity) and click Capture to save your first one — locally.";
+      return;
+    }
+    deps.stats.textContent = `${items} passport item${items === 1 ? "" : "s"} · ${p.captures.length} capture${p.captures.length === 1 ? "" : "s"} · stored on this device.`;
   }
 
   deps.select.addEventListener("change", async () => {
