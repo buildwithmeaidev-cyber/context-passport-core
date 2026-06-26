@@ -91,8 +91,57 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     e.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+  document.getElementById("cp-privacy-more")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.runtime.openOptionsPage();
+  });
 })();
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
+
+async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagService").FeatureFlagService): Promise<void> {
+  const togStore = document.getElementById("cp-tog-storage") as HTMLInputElement;
+  const togInject = document.getElementById("cp-tog-inject") as HTMLInputElement;
+  const dotStore = document.getElementById("cp-dot-store") as HTMLSpanElement;
+  const dotInject = document.getElementById("cp-dot-inject") as HTMLSpanElement;
+  const badge = document.getElementById("cp-privacy-badge") as HTMLSpanElement;
+
+  const sync = () => {
+    const s = flags.isEnabled("privacy.allowLocalStorage");
+    const i = flags.isEnabled("privacy.allowInjection");
+    togStore.checked = s;
+    togInject.checked = i;
+    dotStore.dataset.state = s ? "on" : "off";
+    dotInject.dataset.state = i ? "on" : "off";
+    const allOn = s && i;
+    badge.textContent = allOn ? "Local only" : "Restricted";
+    badge.dataset.state = allOn ? "good" : "warn";
+  };
+  sync();
+  togStore.addEventListener("change", async () => {
+    await flags.set("privacy.allowLocalStorage", togStore.checked);
+    sync();
+  });
+  togInject.addEventListener("change", async () => {
+    await flags.set("privacy.allowInjection", togInject.checked);
+    sync();
+  });
+}
+
+async function maybeShowOnboarding(storage: import("@/storage/StorageGateway").StorageGateway): Promise<void> {
+  const modal = document.getElementById("cp-onboarding") as HTMLDivElement;
+  const dismiss = document.getElementById("cp-onb-dismiss") as HTMLButtonElement;
+  const r = await storage.read("settings:user");
+  const settings = r.ok && r.value
+    ? r.value
+    : { activeProjectId: null, defaultRenderMode: "balanced", theme: "system" as const, onboardingSeenAt: null };
+  if (settings.onboardingSeenAt) return;
+  modal.hidden = false;
+  dismiss.addEventListener("click", async () => {
+    modal.hidden = true;
+    await storage.write("settings:user", { ...settings, onboardingSeenAt: Date.now() });
+  });
+}
+
