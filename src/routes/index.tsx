@@ -59,11 +59,29 @@ const TESTIMONIALS = [
 ];
 
 const FAQS = [
-  { q: "Where does my data live?", a: "Locally, in your browser's extension storage. No backend, no account, no telemetry. The extension never makes outbound network requests with your conversations." },
-  { q: "Which AI tools are supported?", a: "ChatGPT, Claude, Gemini, and Perplexity at launch. More adapters are added as the API surfaces stabilize." },
-  { q: "How is this different from copy-paste?", a: "ContextPassport extracts the structured shape of your project — goals, decisions, constraints, next actions — and renders it in a format the receiving AI is tuned to honor. Copy-paste gives you a transcript. We give you a working context." },
-  { q: "What does Founder Lifetime include?", a: "Everything in Pro, forever, with no recurring charge. Plus the Founder Handoff mode tuned for problem · market · revenue model · validation · risks, and early access to new providers." },
-  { q: "Can I cancel anytime?", a: "Pro is monthly with no commitment. Founder is a one-time payment — there's nothing to cancel." },
+  { q: "What is ContextPassport?", a: "A free Chrome extension that lets you move your AI conversations between ChatGPT, Claude, Gemini, and Perplexity — so you don't have to start over every time you switch tools." },
+  { q: "Why would I need it?", a: "Long projects don't fit in one chat. You hit context limits, switch models, lose decisions, repeat yourself. ContextPassport keeps the project — goals, decisions, progress, next steps — so any AI can pick it up." },
+  { q: "How does it work?", a: "Open any supported AI tab and click Capture. The extension reads what's on screen and saves a short, structured summary on your device. Open another AI, click Continue, and the summary is pasted in for you. That's it." },
+  { q: "Is my data safe? Is anything uploaded?", a: "Nothing is uploaded — ever. Everything stays in your browser, on your device. There is no server that sees your conversations. You can verify in DevTools → Network: the extension makes zero outbound requests with your data." },
+  { q: "What happens when I click Capture?", a: "The extension reads the conversation visible on the page, structures it into goals / decisions / progress / next actions, and saves it to your browser's local storage. No API calls. Nothing sent anywhere." },
+  { q: "What happens when I click Continue?", a: "Your saved summary is formatted for the AI you're currently on and pasted into its message box. You review it, then press Send yourself. Nothing is sent automatically." },
+  { q: "Why does the extension need permissions?", a: "‘Read AI websites’ lets it see the conversation on the page. ‘Storage’ lets it save summaries on your device. ‘Clipboard’ lets it paste the summary into the next AI. Nothing else. No tracking, no analytics." },
+  { q: "Can I turn off storage or pasting?", a: "Yes. The popup's Privacy panel can disable local storage or copy/paste at any time. The options page has a one-click ‘Erase all local data’." },
+  { q: "Which AI tools are supported?", a: "ChatGPT, Claude, Gemini, and Perplexity at launch. More are added as their pages stabilize." },
+  { q: "What does Founder Lifetime include?", a: "Everything in Pro, forever, no recurring charge. Plus the Founder Handoff mode and early access to new providers." },
+];
+
+const PRIVACY_CARDS = [
+  { i: "🔒", t: "Local-first", b: "Every conversation summary is stored on your device, in your browser. Nowhere else." },
+  { i: "☁️", t: "No cloud storage", b: "Your conversations never pass through our servers. We don't have any." },
+  { i: "👀", t: "No tracking", b: "No analytics, no telemetry, no account. We do not read, analyze, or sell your data." },
+  { i: "🗑️", t: "Full control", b: "One-click erase all local data. Toggle off storage or paste at any time." },
+];
+
+const PERMISSIONS = [
+  { t: "Read AI websites (activeTab + scripting)", b: "Needed to see the conversation on the page when you click Capture. Only runs on ChatGPT, Claude, Gemini, and Perplexity — and only when you trigger it." },
+  { t: "Storage", b: "Needed to save your project summaries locally on this device. Uses chrome.storage.local, never the cloud." },
+  { t: "Clipboard / page write", b: "Needed to paste a saved summary into the next AI's message box when you click Continue. You still review and press Send yourself." },
 ];
 
 const PLANS = [
@@ -175,6 +193,7 @@ function Index() {
             <a href="#problem" className="cp-nav-link">Problem</a>
             <a href="#features" className="cp-nav-link">Features</a>
             <a href="#workflow" className="cp-nav-link">Workflow</a>
+            <a href="#privacy" className="cp-nav-link">Privacy</a>
             <a href="#pricing" className="cp-nav-link">Pricing</a>
             <a href="#faq" className="cp-nav-link">FAQ</a>
           </div>
@@ -192,14 +211,14 @@ function Index() {
             <p className="cp-eyebrow">AI Work Continuity Platform · v0.3.0</p>
           </div>
           <h1 className="cp-h1">
-            Continue any AI conversation,
+            Pick up where you left off —
             <br />
-            <span className="text-muted">anywhere.</span>
+            <span className="text-muted">in any AI.</span>
           </h1>
           <p className="cp-lede">
-            Capture, compress, transfer, and continue work across ChatGPT, Claude, Gemini, and
-            Perplexity — without losing context. ContextPassport extracts the structured shape of
-            your project and re-establishes it in any AI tab.
+            Move your conversations between ChatGPT, Claude, Gemini, and Perplexity without
+            starting over. One click captures what matters — goals, decisions, progress, next
+            steps — and pastes it into your next AI. Everything stays on your device.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-2">
@@ -370,10 +389,48 @@ function Index() {
         </div>
       </section>
 
+      {/* ===================== PRIVACY ===================== */}
+      <section id="privacy" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="05" title="Your conversations stay yours" />
+          <p className="cp-section-lede">
+            Privacy isn't a footer link here. It's the whole design. Read this before you install.
+          </p>
+          <ul className="cp-grid">
+            {PRIVACY_CARDS.map((c) => (
+              <li key={c.t} className="cp-cell">
+                <span className="cp-cell-num" aria-hidden>{c.i}</span>
+                <p className="cp-cell-title">{c.t}</p>
+                <p className="cp-cell-body">{c.b}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-10">
+            <p className="cp-eyebrow mb-3">Permissions, explained</p>
+            <ul className="cp-flow">
+              {PERMISSIONS.map((p, i) => (
+                <li key={p.t} className="cp-flow-row">
+                  <span className="cp-flow-num">{String(i + 1).padStart(2, "0")}</span>
+                  <div>
+                    <p className="cp-step-title">{p.t}</p>
+                    <p className="cp-step-body">{p.b}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="cp-section-lede mt-4">
+              Don't take our word for it: open Chrome DevTools → Network while you use the
+              extension. You'll see zero outbound requests carrying your conversations.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ===================== PRICING ===================== */}
       <section id="pricing" className="cp-section scroll-mt-24">
         <div className="cp-wrap">
-          <SectionLabel index="05" title="Pricing" />
+          <SectionLabel index="06" title="Pricing" />
           <p className="cp-section-lede">
             Use it free, forever. Or unlock the full intelligence engine.
           </p>
@@ -432,7 +489,7 @@ function Index() {
       {/* ===================== FAQ ===================== */}
       <section id="faq" className="cp-section scroll-mt-24">
         <div className="cp-wrap">
-          <SectionLabel index="06" title="Frequently asked" />
+          <SectionLabel index="07" title="Frequently asked" />
           <ul className="cp-faq">
             {FAQS.map((f) => (
               <li key={f.q}>
