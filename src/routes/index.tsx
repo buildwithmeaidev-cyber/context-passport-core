@@ -388,10 +388,48 @@ function Index() {
         </div>
       </section>
 
+      {/* ===================== PRIVACY ===================== */}
+      <section id="privacy" className="cp-section scroll-mt-24">
+        <div className="cp-wrap">
+          <SectionLabel index="05" title="Your conversations stay yours" />
+          <p className="cp-section-lede">
+            Privacy isn't a footer link here. It's the whole design. Read this before you install.
+          </p>
+          <ul className="cp-grid">
+            {PRIVACY_CARDS.map((c) => (
+              <li key={c.t} className="cp-cell">
+                <span className="cp-cell-num" aria-hidden>{c.i}</span>
+                <p className="cp-cell-title">{c.t}</p>
+                <p className="cp-cell-body">{c.b}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-10">
+            <p className="cp-eyebrow mb-3">Permissions, explained</p>
+            <ul className="cp-flow">
+              {PERMISSIONS.map((p, i) => (
+                <li key={p.t} className="cp-flow-row">
+                  <span className="cp-flow-num">{String(i + 1).padStart(2, "0")}</span>
+                  <div>
+                    <p className="cp-step-title">{p.t}</p>
+                    <p className="cp-step-body">{p.b}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="cp-section-lede mt-4">
+              Don't take our word for it: open Chrome DevTools → Network while you use the
+              extension. You'll see zero outbound requests carrying your conversations.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ===================== PRICING ===================== */}
       <section id="pricing" className="cp-section scroll-mt-24">
         <div className="cp-wrap">
-          <SectionLabel index="05" title="Pricing" />
+          <SectionLabel index="06" title="Pricing" />
           <p className="cp-section-lede">
             Use it free, forever. Or unlock the full intelligence engine.
           </p>
