@@ -210,14 +210,14 @@ function Index() {
             <p className="cp-eyebrow">AI Work Continuity Platform · v0.3.0</p>
           </div>
           <h1 className="cp-h1">
-            Continue any AI conversation,
+            Pick up where you left off —
             <br />
-            <span className="text-muted">anywhere.</span>
+            <span className="text-muted">in any AI.</span>
           </h1>
           <p className="cp-lede">
-            Capture, compress, transfer, and continue work across ChatGPT, Claude, Gemini, and
-            Perplexity — without losing context. ContextPassport extracts the structured shape of
-            your project and re-establishes it in any AI tab.
+            Move your conversations between ChatGPT, Claude, Gemini, and Perplexity without
+            starting over. One click captures what matters — goals, decisions, progress, next
+            steps — and pastes it into your next AI. Everything stays on your device.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-2">
