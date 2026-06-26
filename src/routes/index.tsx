@@ -489,7 +489,7 @@ function Index() {
       {/* ===================== FAQ ===================== */}
       <section id="faq" className="cp-section scroll-mt-24">
         <div className="cp-wrap">
-          <SectionLabel index="06" title="Frequently asked" />
+          <SectionLabel index="07" title="Frequently asked" />
           <ul className="cp-faq">
             {FAQS.map((f) => (
               <li key={f.q}>
