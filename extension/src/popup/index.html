@@ -10,15 +10,16 @@
     <!-- First-run onboarding modal -->
     <div id="cp-onboarding" class="cp-modal-backdrop" hidden>
       <div class="cp-modal" role="dialog" aria-labelledby="cp-onb-title">
-        <h2 id="cp-onb-title">How ContextPassport handles your data</h2>
+        <h2 id="cp-onb-title">Welcome to ContextPassport</h2>
+        <p class="cp-muted" style="margin:6px 0 14px">Move your AI conversations between tools without starting over. Takes 60 seconds to learn.</p>
         <ol class="cp-onb-list">
-          <li><strong>Extract</strong> — reads the open AI chat from the page DOM. No network call.</li>
-          <li><strong>Compress</strong> — structures it into goals, decisions, progress, next actions, locally.</li>
-          <li><strong>Store</strong> — saves on this device in <code>chrome.storage.local</code> only.</li>
-          <li><strong>Copy / Inject</strong> — pasted into another AI tab only when <em>you</em> click.</li>
+          <li><strong>What it does</strong> — Move conversations between ChatGPT, Claude, Gemini, and Perplexity without losing context.</li>
+          <li><strong>How it works</strong> — Capture → Transfer → Continue. One click each.</li>
+          <li><strong>Your privacy</strong> — Everything stays on your device. Nothing is uploaded. No account, no tracking.</li>
+          <li><strong>Try it</strong> — Open ChatGPT (or another AI), then click <em>Capture this conversation</em>.</li>
         </ol>
-        <p class="cp-muted">You can switch off local storage or copy/inject any time in the Privacy panel below.</p>
-        <button id="cp-onb-dismiss" class="cp-btn cp-btn-primary">Got it</button>
+        <p class="cp-muted">You can change privacy settings any time in the Privacy panel below.</p>
+        <button id="cp-onb-dismiss" class="cp-btn cp-btn-primary">Got it — let's go</button>
       </div>
     </div>
 
