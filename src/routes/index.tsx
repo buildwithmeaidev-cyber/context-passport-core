@@ -193,6 +193,7 @@ function Index() {
             <a href="#problem" className="cp-nav-link">Problem</a>
             <a href="#features" className="cp-nav-link">Features</a>
             <a href="#workflow" className="cp-nav-link">Workflow</a>
+            <a href="#privacy" className="cp-nav-link">Privacy</a>
             <a href="#pricing" className="cp-nav-link">Pricing</a>
             <a href="#faq" className="cp-nav-link">FAQ</a>
           </div>
