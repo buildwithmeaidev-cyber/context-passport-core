@@ -35,7 +35,7 @@ export async function renderInjector(deps: InjectorViewDeps): Promise<void> {
     if (!project) { deps.status.textContent = "Project not found."; return; }
     const target = deps.getTargetProvider();
     deps.button.disabled = true;
-    deps.status.textContent = "Rendering passport…";
+    deps.status.textContent = "Preparing your summary…";
     try {
       const r = deps.continuity.render(deps.modeSelect.value, {
         projectName: project.name,
@@ -46,11 +46,11 @@ export async function renderInjector(deps: InjectorViewDeps): Promise<void> {
         ...(target ? { targetProviderId: target } : {}),
       });
       if (!r.ok) throw new Error(r.error.message);
-      deps.status.textContent = `Injecting ${r.value.stats.chars} chars · ${r.value.stats.facetsIncluded} facets${r.value.stats.facetsExcluded ? ` (skipped ${r.value.stats.facetsExcluded})` : ""}…`;
+      deps.status.textContent = `Pasting ${r.value.stats.chars} characters into the page…`;
       await deps.inject(r.value.text);
-      deps.status.textContent = "Injected. Edit, then press Send in the page.";
+      deps.status.textContent = "✓ Context pasted. Review it, then press Send to continue.";
     } catch (e) {
-      deps.status.textContent = `Failed: ${e instanceof Error ? e.message : String(e)}`;
+      deps.status.textContent = `Couldn't paste: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       deps.button.disabled = false;
     }
