@@ -65,6 +65,11 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   (document.getElementById("cp-project") as HTMLSelectElement)
     .addEventListener("change", () => refreshHealth(projectPicker.activeProjectId()));
 
+  wireEraseFlow(erase, async () => {
+    await projectPicker.refresh();
+    await refreshHealth(projectPicker.activeProjectId());
+  });
+
   renderCapture({
     button: document.getElementById("cp-capture") as HTMLButtonElement,
     status: document.getElementById("cp-capture-status") as HTMLParagraphElement,
