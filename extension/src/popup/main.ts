@@ -12,9 +12,14 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   const storage = container.resolve(Tokens.Storage);
   const health = container.resolve(Tokens.Health);
   const flags = container.resolve(Tokens.Flags);
+  const erase = container.resolve(Tokens.Erase);
 
   // ===== Privacy panel + onboarding =====
   await wirePrivacyPanel(flags);
+  wireEraseFlow(erase, async () => {
+    await projectPicker?.refresh().catch(() => {});
+    await refreshHealth(null);
+  });
   await maybeShowOnboarding(storage);
 
   const providerBadge = document.getElementById("cp-provider") as HTMLSpanElement;
