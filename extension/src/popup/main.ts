@@ -16,10 +16,6 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
 
   // ===== Privacy panel + onboarding =====
   await wirePrivacyPanel(flags);
-  wireEraseFlow(erase, async () => {
-    await projectPicker?.refresh().catch(() => {});
-    await refreshHealth(null);
-  });
   await maybeShowOnboarding(storage);
 
   const providerBadge = document.getElementById("cp-provider") as HTMLSpanElement;
