@@ -35,14 +35,28 @@ import type { Project } from "@/storage/schema";
     togStore.addEventListener("change", async () => { await flags.set("privacy.allowLocalStorage", togStore.checked); sync(); });
     togInject.addEventListener("change", async () => { await flags.set("privacy.allowInjection", togInject.checked); sync(); });
     erase.addEventListener("click", async () => {
-      if (!confirm("Erase ALL ContextPassport data on this device? This cannot be undone.")) return;
-      await storage.remove("projects");
-      await storage.remove("settings:user");
-      await storage.remove("flags:overrides");
-      eraseStatus.textContent = "All local data erased. Reload the extension to reset state.";
+      const preview = await eraseSvc.preview();
+      const msg = `Erase ALL ContextPassport data on this device?\n\n` +
+        `• ${preview.projects} project(s)\n` +
+        `• ${preview.captures} capture(s)\n` +
+        `• ${preview.passportItems} passport item(s)\n` +
+        `• ${preview.memoryNotes} memory note(s)\n` +
+        `• Settings: ${preview.hasSettings ? "yes" : "none"}\n` +
+        `• Flag overrides: ${preview.hasFlagOverrides ? "yes" : "none"}\n` +
+        `• Quarantine: ${preview.quarantine}\n\n` +
+        `Total storage keys: ${preview.totalKeys}. This cannot be undone.`;
+      if (!confirm(msg)) return;
+      eraseStatus.textContent = "Deleting…";
+      eraseStatus.dataset.state = "";
+      const result = await eraseSvc.eraseAll();
+      eraseStatus.textContent = `✓ Deleted ${result.totalKeysRemoved} storage key(s). ` +
+        (result.verifiedEmpty ? "Storage verified empty." : "Storage cleared with forced reset.");
       eraseStatus.dataset.state = "success";
+      setTimeout(() => location.reload(), 800);
     });
   }
+
+  wirePrivacySection();
 
   let activeId: string | null = null;
   await renderAll();
