@@ -16,10 +16,36 @@
           <li><strong>What it does</strong> — Move conversations between ChatGPT, Claude, Gemini, and Perplexity without losing context.</li>
           <li><strong>How it works</strong> — Capture → Transfer → Continue. One click each.</li>
           <li><strong>Your privacy</strong> — Everything stays on your device. Nothing is uploaded. No account, no tracking.</li>
-          <li><strong>Try it</strong> — Open ChatGPT (or another AI), then click <em>Capture this conversation</em>.</li>
+          <li><strong>Full control</strong> — You can wipe everything in one click, any time. We'll show what's gone the moment it's done.</li>
         </ol>
-        <p class="cp-muted">You can change privacy settings any time in the Privacy panel below.</p>
-        <button id="cp-onb-dismiss" class="cp-btn cp-btn-primary">Got it — let's go</button>
+        <div class="cp-modal-actions">
+          <button id="cp-onb-erase" class="cp-btn cp-btn-danger-ghost">Delete my data</button>
+          <button id="cp-onb-dismiss" class="cp-btn cp-btn-primary">Got it — let's go</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete-my-data confirmation modal -->
+    <div id="cp-erase-modal" class="cp-modal-backdrop" hidden>
+      <div class="cp-modal" role="dialog" aria-labelledby="cp-erase-title" aria-describedby="cp-erase-desc">
+        <h2 id="cp-erase-title">Delete all ContextPassport data?</h2>
+        <p id="cp-erase-desc" class="cp-muted" style="margin:6px 0 12px">
+          This permanently erases everything stored by this extension on this device. It cannot be undone.
+        </p>
+        <ul class="cp-erase-list" id="cp-erase-list"></ul>
+        <p class="cp-muted" style="margin:10px 0 0">
+          Nothing leaves your device — there's no cloud copy to delete.
+        </p>
+        <div class="cp-modal-actions">
+          <button id="cp-erase-cancel" class="cp-btn">Cancel</button>
+          <button id="cp-erase-confirm" class="cp-btn cp-btn-danger">Yes, delete everything</button>
+        </div>
+        <div id="cp-erase-done" class="cp-erase-done" hidden>
+          <div class="cp-erase-check">✓</div>
+          <strong>All data deleted.</strong>
+          <p class="cp-muted" id="cp-erase-summary"></p>
+          <button id="cp-erase-close" class="cp-btn cp-btn-primary">Close</button>
+        </div>
       </div>
     </div>
 
