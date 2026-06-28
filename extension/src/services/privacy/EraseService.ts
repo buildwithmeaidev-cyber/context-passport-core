@@ -40,7 +40,6 @@ export class EraseService {
     const projectsR = await this.storage.read("projects");
     const settingsR = await this.storage.read("settings:user");
     const flagsR = await this.storage.read("flags:overrides");
-    const memoryR = await this.storage.read("memory:notes").catch(() => ({ ok: true, value: null }) as const);
 
     const projects = projectsR.ok && projectsR.value ? projectsR.value : [];
     const captures = projects.reduce((n, p) => n + (p.captures?.length ?? 0), 0);
@@ -48,9 +47,7 @@ export class EraseService {
       const pp = p.passport ?? {};
       return n + Object.values(pp).reduce<number>((a, list) => a + (Array.isArray(list) ? list.length : 0), 0);
     }, 0);
-    const memoryNotes = memoryR.ok && memoryR.value && Array.isArray((memoryR.value as { notes?: unknown[] }).notes)
-      ? ((memoryR.value as { notes: unknown[] }).notes.length)
-      : 0;
+    const memoryNotes = projects.reduce((n, p) => n + (p.memory?.length ?? 0), 0);
 
     const allKeys = await this.driver.keys();
     const quarantine = allKeys.filter((k) => k.startsWith("quarantine:")).length;
