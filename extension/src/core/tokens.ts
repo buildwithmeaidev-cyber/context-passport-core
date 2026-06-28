@@ -11,6 +11,7 @@ import type { InjectionService } from "@/services/injection/InjectionService";
 import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
 import type { ContextHealthService } from "@/services/intelligence/ContextHealthService";
 import type { ProjectMemoryService } from "@/services/intelligence/ProjectMemoryService";
+import type { EraseService } from "@/services/privacy/EraseService";
 
 export const Tokens = {
   Logger: new Token<Logger>("Logger"),
@@ -25,6 +26,7 @@ export const Tokens = {
   Intelligence: new Token<IntelligenceService>("IntelligenceService"),
   Health: new Token<ContextHealthService>("ContextHealthService"),
   Memory: new Token<ProjectMemoryService>("ProjectMemoryService"),
+  Erase: new Token<EraseService>("EraseService"),
 } as const;
 
 export interface ConversationTurn {

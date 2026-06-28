@@ -12,6 +12,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   const storage = container.resolve(Tokens.Storage);
   const health = container.resolve(Tokens.Health);
   const flags = container.resolve(Tokens.Flags);
+  const erase = container.resolve(Tokens.Erase);
 
   // ===== Privacy panel + onboarding =====
   await wirePrivacyPanel(flags);
@@ -63,6 +64,11 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   await refreshHealth(projectPicker.activeProjectId());
   (document.getElementById("cp-project") as HTMLSelectElement)
     .addEventListener("change", () => refreshHealth(projectPicker.activeProjectId()));
+
+  wireEraseFlow(erase, async () => {
+    await projectPicker.refresh();
+    await refreshHealth(projectPicker.activeProjectId());
+  });
 
   renderCapture({
     button: document.getElementById("cp-capture") as HTMLButtonElement,
@@ -133,10 +139,12 @@ async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagSer
 async function maybeShowOnboarding(storage: import("@/storage/StorageGateway").StorageGateway): Promise<void> {
   const modal = document.getElementById("cp-onboarding") as HTMLDivElement;
   const dismiss = document.getElementById("cp-onb-dismiss") as HTMLButtonElement;
+  const eraseBtn = document.getElementById("cp-onb-erase") as HTMLButtonElement;
   const r = await storage.read("settings:user");
   const settings = r.ok && r.value
     ? r.value
     : { activeProjectId: null, defaultRenderMode: "balanced", theme: "system" as const, onboardingSeenAt: null };
+  eraseBtn.addEventListener("click", () => openEraseModal());
   if (settings.onboardingSeenAt) return;
   modal.hidden = false;
   dismiss.addEventListener("click", async () => {
@@ -144,4 +152,98 @@ async function maybeShowOnboarding(storage: import("@/storage/StorageGateway").S
     await storage.write("settings:user", { ...settings, onboardingSeenAt: Date.now() });
   });
 }
+
+function openEraseModal(): void {
+  const modal = document.getElementById("cp-erase-modal") as HTMLDivElement;
+  modal.hidden = false;
+  modal.dispatchEvent(new CustomEvent("cp:open"));
+}
+
+function wireEraseFlow(
+  erase: import("@/services/privacy/EraseService").EraseService,
+  afterErase: () => Promise<void>,
+): void {
+  const modal = document.getElementById("cp-erase-modal") as HTMLDivElement;
+  const openBtn = document.getElementById("cp-erase-open") as HTMLButtonElement;
+  const cancel = document.getElementById("cp-erase-cancel") as HTMLButtonElement;
+  const confirm = document.getElementById("cp-erase-confirm") as HTMLButtonElement;
+  const close = document.getElementById("cp-erase-close") as HTMLButtonElement;
+  const list = document.getElementById("cp-erase-list") as HTMLUListElement;
+  const done = document.getElementById("cp-erase-done") as HTMLDivElement;
+  const summary = document.getElementById("cp-erase-summary") as HTMLParagraphElement;
+  const desc = document.getElementById("cp-erase-desc") as HTMLParagraphElement;
+
+  const reset = (): void => {
+    done.hidden = true;
+    cancel.hidden = false;
+    confirm.hidden = false;
+    confirm.disabled = false;
+    confirm.textContent = "Yes, delete everything";
+    desc.hidden = false;
+    list.hidden = false;
+  };
+
+  const renderPreview = async (): Promise<void> => {
+    reset();
+    list.innerHTML = `<li class="cp-erase-row"><span class="cp-spinner"></span><span>Scanning local data…</span></li>`;
+    const p = await erase.preview();
+    const rows: Array<[string, number | string]> = [
+      ["Projects", p.projects],
+      ["Captured conversations", p.captures],
+      ["Passport items (goals, decisions, next actions…)", p.passportItems],
+      ["Project memory notes", p.memoryNotes],
+      ["User settings", p.hasSettings ? "1 record" : "none"],
+      ["Feature-flag overrides", p.hasFlagOverrides ? "1 record" : "none"],
+      ["Quarantined data", p.quarantine],
+    ];
+    list.innerHTML = rows.map(([label, value]) => {
+      const empty = value === 0 || value === "none";
+      return `<li class="cp-erase-row${empty ? " cp-is-empty" : ""}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </li>`;
+    }).join("") + `<li class="cp-erase-row cp-erase-total">
+        <span>Storage keys to remove</span><strong>${p.totalKeys}</strong>
+      </li>`;
+  };
+
+  const close_ = (): void => { modal.hidden = true; };
+
+  openBtn.addEventListener("click", () => { modal.hidden = false; renderPreview(); });
+  modal.addEventListener("cp:open", () => { renderPreview(); });
+  cancel.addEventListener("click", close_);
+  close.addEventListener("click", close_);
+  modal.addEventListener("click", (e) => { if (e.target === modal) close_(); });
+
+  confirm.addEventListener("click", async () => {
+    confirm.disabled = true;
+    confirm.innerHTML = `<span class="cp-spinner"></span> Deleting…`;
+    try {
+      const result = await erase.eraseAll();
+      list.hidden = true;
+      desc.hidden = true;
+      cancel.hidden = true;
+      confirm.hidden = true;
+      done.hidden = false;
+      const parts: string[] = [];
+      if (result.projectsRemoved) parts.push(`${result.projectsRemoved} project${result.projectsRemoved === 1 ? "" : "s"}`);
+      if (result.capturesRemoved) parts.push(`${result.capturesRemoved} capture${result.capturesRemoved === 1 ? "" : "s"}`);
+      if (result.passportItemsRemoved) parts.push(`${result.passportItemsRemoved} passport item${result.passportItemsRemoved === 1 ? "" : "s"}`);
+      if (result.memoryNotesRemoved) parts.push(`${result.memoryNotesRemoved} memory note${result.memoryNotesRemoved === 1 ? "" : "s"}`);
+      if (result.settingsRemoved) parts.push("user settings");
+      if (result.flagsRemoved) parts.push("flag overrides");
+      if (result.quarantineRemoved) parts.push(`${result.quarantineRemoved} quarantined record${result.quarantineRemoved === 1 ? "" : "s"}`);
+      const body = parts.length ? `Removed ${parts.join(", ")}.` : "There was nothing stored — your device is clean.";
+      const verified = result.verifiedEmpty ? "Storage verified empty." : "Storage cleared (some keys required a forced reset).";
+      summary.textContent = `${body} ${verified}`;
+      await afterErase();
+    } catch (e) {
+      confirm.disabled = false;
+      confirm.textContent = "Try again";
+      desc.textContent = `Deletion failed: ${String(e)}. Your data is untouched.`;
+      desc.dataset.state = "error";
+    }
+  });
+}
+
 
