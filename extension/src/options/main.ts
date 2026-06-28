@@ -10,8 +10,7 @@ import type { Project } from "@/storage/schema";
   const flags = container.resolve(Tokens.Flags);
   const projects = container.resolve(Tokens.Projects);
   const storage = container.resolve(Tokens.Storage);
-
-  wirePrivacySection();
+  const eraseSvc = container.resolve(Tokens.Erase);
 
   const plan = license.plan();
   (document.getElementById("cp-plan") as HTMLElement).textContent =
