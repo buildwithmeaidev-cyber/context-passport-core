@@ -40,12 +40,16 @@ export abstract class DomAdapterBase implements ProviderAdapter {
     try {
       const nodes = Array.from(document.querySelectorAll(this.turnSelectors.container));
       const turns: ConversationTurn[] = [];
+      const seen = new Set<string>();
       for (const node of nodes) {
         const isUser = node.matches(this.turnSelectors.user) || !!node.querySelector(this.turnSelectors.user);
         const isAssistant = node.matches(this.turnSelectors.assistant) || !!node.querySelector(this.turnSelectors.assistant);
         const textNode = node.querySelector(this.turnSelectors.text) ?? node;
-        const text = (textNode.textContent ?? "").trim();
+        const text = cleanText(textNode.textContent ?? "");
         if (!text) continue;
+        const fingerprint = `${isUser ? "user" : isAssistant ? "assistant" : "assistant"}:${text}`;
+        if (seen.has(fingerprint)) continue;
+        seen.add(fingerprint);
         const role: ConversationTurn["role"] = isUser ? "user" : isAssistant ? "assistant" : "assistant";
         turns.push({ role, text });
       }
@@ -60,21 +64,55 @@ export abstract class DomAdapterBase implements ProviderAdapter {
     try {
       const el = document.querySelector<HTMLElement>(this.composerSelector);
       if (!el) return err(appError("ADAPTER_FAILED", "Composer not found"));
-      if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-        el.focus();
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set
-          ?? Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-        setter?.call(el, text);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-      } else {
-        // contenteditable
-        el.focus();
-        el.textContent = text;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
-      }
+      writeToComposer(el, text);
       return ok(true);
     } catch (e) {
       return err(appError("ADAPTER_FAILED", "injectPrompt failed", e));
     }
   }
+}
+
+function cleanText(text: string): string {
+  return text
+    .replace(/\u00a0/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function writeToComposer(el: HTMLElement, text: string): void {
+  el.focus();
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+    const proto = el instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    setter?.call(el, text);
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+
+  const target = findEditableTarget(el);
+  target.focus();
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  let inserted = false;
+  try {
+    inserted = document.execCommand("insertText", false, text);
+  } catch {
+    inserted = false;
+  }
+  if (!inserted || !cleanText(target.textContent ?? "").includes(text.slice(0, 40))) {
+    target.textContent = text;
+  }
+  target.dispatchEvent(new InputEvent("input", { bubbles: true, data: text, inputType: "insertText" }));
+  target.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function findEditableTarget(el: HTMLElement): HTMLElement {
+  if (el.isContentEditable) return el;
+  return el.querySelector<HTMLElement>('[contenteditable="true"]') ?? el;
 }

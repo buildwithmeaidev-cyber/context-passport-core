@@ -18,6 +18,7 @@ export class FeatureFlagService {
       "providers.chatgpt.enabled": true,
       "providers.claude.enabled": true,
       "providers.gemini.enabled": true,
+      "providers.perplexity.enabled": true,
       "ui.showPremiumUpsell": true,
       "privacy.allowLocalStorage": true,
       "privacy.allowInjection": true,
