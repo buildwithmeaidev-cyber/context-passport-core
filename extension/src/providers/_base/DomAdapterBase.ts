@@ -53,6 +53,10 @@ export abstract class DomAdapterBase implements ProviderAdapter {
         const role: ConversationTurn["role"] = isUser ? "user" : isAssistant ? "assistant" : "assistant";
         turns.push({ role, text });
       }
+      if (turns.length === 0) {
+        const fallbackText = extractReadablePageText();
+        if (fallbackText) turns.push({ role: "assistant", text: fallbackText });
+      }
       const title = document.title || this.label;
       return ok({ title, turns });
     } catch (e) {
@@ -115,4 +119,16 @@ function writeToComposer(el: HTMLElement, text: string): void {
 function findEditableTarget(el: HTMLElement): HTMLElement {
   if (el.isContentEditable) return el;
   return el.querySelector<HTMLElement>('[contenteditable="true"]') ?? el;
+}
+
+function extractReadablePageText(): string {
+  const root = document.querySelector("main") ?? document.body;
+  const noisy = [
+    "nav", "header", "footer", "aside", "button", "select", "textarea", "input", "script", "style",
+    "#contextpassport-quick-widget",
+  ].join(",");
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(noisy).forEach((n) => n.remove());
+  const text = cleanText(clone.textContent ?? "");
+  return text.length >= 80 ? text.slice(0, 14000) : "";
 }
