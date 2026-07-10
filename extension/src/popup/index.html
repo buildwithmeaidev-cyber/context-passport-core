@@ -54,6 +54,19 @@
       <span id="cp-provider" class="cp-badge">detecting…</span>
     </header>
 
+    <section class="cp-section cp-hero-action">
+      <div class="cp-ready-row">
+        <div>
+          <span class="cp-label">One-click handoff</span>
+          <strong id="cp-ready-title">Checking this tab…</strong>
+        </div>
+        <span id="cp-ready-dot" class="cp-ready-dot" data-state="idle"></span>
+      </div>
+      <p id="cp-ready-desc" class="cp-muted">Open ChatGPT, Claude, Gemini, or Perplexity to capture and continue.</p>
+      <button id="cp-one-click" class="cp-btn cp-btn-primary">Capture & paste handoff</button>
+      <p id="cp-one-click-status" class="cp-muted"></p>
+    </section>
+
     <section class="cp-section">
       <label class="cp-label" for="cp-project">Active project</label>
       <div class="cp-row">
@@ -68,20 +81,24 @@
       <ul id="cp-health-recs" class="cp-recs"></ul>
     </section>
 
-    <section class="cp-section">
-      <button id="cp-capture" class="cp-btn cp-btn-primary">Capture this conversation</button>
-      <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">Saves a structured summary on this device. Nothing is uploaded.</p>
-      <p id="cp-capture-status" class="cp-muted"></p>
-    </section>
+    <details class="cp-section cp-advanced">
+      <summary>
+        <span class="cp-label" style="margin:0">Advanced controls</span>
+        <span class="cp-muted">capture or paste separately</span>
+      </summary>
+      <div class="cp-advanced-body">
+        <button id="cp-capture" class="cp-btn">Capture only</button>
+        <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">Saves a structured summary on this device. Nothing is uploaded.</p>
+        <p id="cp-capture-status" class="cp-muted"></p>
 
-    <section class="cp-section">
-      <label class="cp-label" for="cp-mode">Continue in another AI</label>
-      <select id="cp-mode" class="cp-select"></select>
-      <p id="cp-mode-desc" class="cp-muted"></p>
-      <button id="cp-inject" class="cp-btn">Paste summary into this tab</button>
-      <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">You review and press Send yourself. Nothing is sent automatically.</p>
-      <p id="cp-inject-status" class="cp-muted"></p>
-    </section>
+        <label class="cp-label cp-label-spaced" for="cp-mode">Continue mode</label>
+        <select id="cp-mode" class="cp-select"></select>
+        <p id="cp-mode-desc" class="cp-muted"></p>
+        <button id="cp-inject" class="cp-btn">Paste saved handoff only</button>
+        <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">You review and press Send yourself. Nothing is sent automatically.</p>
+        <p id="cp-inject-status" class="cp-muted"></p>
+      </div>
+    </details>
 
     <!-- Privacy & data panel -->
     <details class="cp-section cp-privacy" id="cp-privacy">
