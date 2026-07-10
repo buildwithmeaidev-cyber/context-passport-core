@@ -400,6 +400,7 @@ code {
   z-index: 100; padding: 14px;
   animation: cp-fade-in 160ms ease-out;
 }
+.cp-modal-backdrop[hidden] { display: none; }
 .cp-modal {
   background: var(--cp-surface);
   border: 1px solid var(--cp-border-strong);
