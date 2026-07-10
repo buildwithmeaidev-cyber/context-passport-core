@@ -1,68 +1,47 @@
-## Goal
+## Problem
 
-Make it explicit and controllable what ContextPassport does with user data. Add a visible "Privacy & Data" status block (popup + options + first-run onboarding) and two functional toggles enforced by the relevant services.
+When the popup opens, the "Delete all ContextPassport data?" modal (and the onboarding modal) render on top of the UI. Clicking Cancel, Close, or Confirm appears to do nothing — the modal never disappears.
 
-## What the user will see
+## Root cause
 
-1. **Popup — collapsible "Privacy & data" panel** (above the footer)
-   - Four short status lines, each with a check icon:
-     - *Extract* — facets parsed locally from the page DOM (no network call).
-     - *Compress* — passport rendered locally into the chosen mode.
-     - *Store* — saved in `chrome.storage.local` on this device only.
-     - *Copy/Inject* — only on your click; pasted into the active AI tab's composer.
-   - Two toggles:
-     - **Allow local storage of captures** (default on)
-     - **Allow copy / inject into pages** (default on)
-   - Link: "Open full privacy details" → options page section.
+In `extension/src/ui/tokens.css` the modal backdrop rule is:
 
-2. **Options page — new "Privacy & data handling" section** at the top
-   - Same toggles, plus longer explanations for each pipeline stage.
-   - "Erase all local data" button (wipes `projects`, `settings:user`, `flags:overrides` via StorageGateway).
-   - Network surface statement: "0 outbound requests. Verify in DevTools → Network."
+```css
+.cp-modal-backdrop {
+  display: flex;
+  ...
+}
+```
 
-3. **First-run onboarding modal** (popup, shown once)
-   - Triggered when `settings:user.onboardingSeenAt` is missing.
-   - 1-screen summary of the 4 pipeline stages + the 2 toggles, "Got it" dismiss.
-   - Persists `onboardingSeenAt` timestamp so it never re-appears.
+An explicit `display: flex` beats the browser's default `[hidden] { display: none }`. So even though the HTML has `hidden` on `#cp-onboarding` and `#cp-erase-modal`, and the JS in `popup/main.ts` toggles `modal.hidden = true/false` correctly, the CSS keeps both modals visible at all times. The Cancel/Close/Confirm handlers do run and do set `hidden`, but the user sees no change.
 
-## Behavior of the two toggles
+This also explains why the popup appears to open on the delete screen: the erase modal is stacked over the normal popup content from the first paint.
 
-- `privacy.allowLocalStorage` (default `true`)
-  - When `false`: `ProjectService.ingestCapture` and any passport write short-circuits and returns a typed `FEATURE_DISABLED` error surfaced in the existing capture status line. Already-stored data is left intact (the user can erase explicitly).
-- `privacy.allowInjection` (default `true`)
-  - When `false`: `InjectionService.inject` and the popup's "Continue here" button refuse with a clear message; the rendered text is still shown so the user can manually copy if they want.
+## Fix (CSS only, one rule)
 
-Both toggles route through the existing `FeatureFlagService` (no new storage namespace; uses `flags:overrides`). Defaults added to the `FeatureFlagService` defaults map.
+Add a hidden-state override so the attribute wins:
 
-## Storage changes
+```css
+.cp-modal-backdrop[hidden] { display: none; }
+```
 
-- Extend `settings:user` schema with `onboardingSeenAt: number | null` (default `null`). No version bump needed — Zod default keeps existing data valid; the schema's `default(null)` handles forward compatibility on read.
-- No new keys, no new migration.
+Location: `extension/src/ui/tokens.css`, in the Modal section around line 395.
 
-## Files to add / edit
-
-**Edit**
-- `extension/src/services/license/FeatureFlagService.ts` — add `privacy.allowLocalStorage` and `privacy.allowInjection` defaults.
-- `extension/src/services/project/ProjectService.ts` — gate `ingestCapture` on `privacy.allowLocalStorage`.
-- `extension/src/services/injection/InjectionService.ts` — gate `inject` on `privacy.allowInjection`.
-- `extension/src/storage/schema.ts` — add `onboardingSeenAt` to `settings:user`.
-- `extension/src/popup/index.html` — add Privacy panel + onboarding modal markup.
-- `extension/src/popup/main.ts` — wire panel toggles, render statuses, show/dismiss onboarding.
-- `extension/src/options/index.html` — add Privacy section markup.
-- `extension/src/options/main.ts` — wire toggles + "Erase all local data".
-- `extension/src/ui/tokens.css` — minimal styles for the panel, toggle row, modal backdrop, status dots (reuse existing tokens, no new colors).
-- `extension/docs/STORAGE_SCHEMA.md` — document the two new flag keys and `onboardingSeenAt`.
-- `extension/docs/STORE_LISTING.md` — note the in-product privacy panel under "Privacy practices".
-
-**No new files required** — feature lives inside existing popup/options slices.
+No JS, HTML, or business-logic changes — the existing `wireEraseFlow` / `maybeShowOnboarding` logic in `extension/src/popup/main.ts` is already correct.
 
 ## Verification
 
-- `bunx vitest run` — existing 37 tests still pass.
-- Manual: open popup, toggle "Allow local storage" off, click Capture → expect "Storage disabled" message and no project change. Toggle "Allow copy/inject" off, click Continue here → expect refusal, rendered text still visible.
-- Repackage `public/contextpassport.zip` via the existing `extension/build.mjs` flow.
+1. Rebuild the extension and repackage `public/contextpassport.zip`.
+2. Open the popup on a fresh profile:
+   - Onboarding modal shows once. "Got it — let's go" closes it and does not reappear on later opens.
+   - Main popup (Active project / Capture / Continue / Privacy panel) is the default view.
+3. Click "Delete my data" (in onboarding or in the Privacy panel):
+   - Confirmation modal opens with the live inventory.
+   - **Cancel** closes it.
+   - Clicking the backdrop closes it.
+   - **Yes, delete everything** runs `EraseService.eraseAll()`, shows the ✓ success summary, and **Close** dismisses the modal.
+4. Reopen the popup — it opens directly on the Capture view, as expected.
 
 ## Out of scope
 
-- No remote sync, no cloud erase, no export-to-file (can be a follow-up).
-- No changes to provider adapters or intelligence engine.
+No changes to `EraseService`, storage, feature flags, or any other functionality — the deletion engine itself already works; it was just visually masked by the stuck modal.
