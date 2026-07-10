@@ -335,6 +335,44 @@ code {
 .cp-muted[data-state="error"] { color: var(--cp-danger); }
 .cp-muted[data-state="success"] { color: var(--cp-success); }
 
+/* ==== One-click popup action ==== */
+.cp-hero-action {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--cp-primary) 13%, var(--cp-surface)), var(--cp-surface));
+  border-color: color-mix(in oklab, var(--cp-primary) 30%, var(--cp-border));
+}
+.cp-ready-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.cp-ready-row strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.cp-ready-dot {
+  width: 10px; height: 10px; border-radius: 999px;
+  background: var(--cp-muted);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--cp-muted) 18%, transparent);
+  flex-shrink: 0;
+}
+.cp-ready-dot[data-state="active"] {
+  background: var(--cp-success);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--cp-success) 20%, transparent);
+}
+
+.cp-advanced > summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; cursor: pointer; list-style: none;
+}
+.cp-advanced > summary::-webkit-details-marker { display: none; }
+.cp-advanced-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cp-border);
+}
+.cp-label-spaced { margin-top: 14px; }
+
 /* ==== Empty state ==== */
 .cp-empty {
   padding: 24px 16px;

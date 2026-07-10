@@ -19,15 +19,30 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   await maybeShowOnboarding(storage);
 
   const providerBadge = document.getElementById("cp-provider") as HTMLSpanElement;
+  const readyTitle = document.getElementById("cp-ready-title") as HTMLElement;
+  const readyDesc = document.getElementById("cp-ready-desc") as HTMLParagraphElement;
+  const readyDot = document.getElementById("cp-ready-dot") as HTMLSpanElement;
+  const oneClick = document.getElementById("cp-one-click") as HTMLButtonElement;
+  const oneClickStatus = document.getElementById("cp-one-click-status") as HTMLParagraphElement;
   let activeProviderId: string | null = null;
   try {
     const r = await sendToActiveTab<DetectResult>({ type: "DETECT_ACTIVE_PROVIDER" });
     activeProviderId = r.providerId;
     providerBadge.textContent = r.providerId ?? "not on a supported site";
     providerBadge.dataset.state = r.providerId ? "active" : "idle";
+    readyTitle.textContent = r.providerId ? `Ready on ${providerLabel(r.providerId)}` : "Open a supported AI chat";
+    readyDesc.textContent = r.providerId
+      ? "Capture this conversation locally and paste a handoff into the composer in one click."
+      : "Use ChatGPT, Claude, Gemini, or Perplexity for capture and paste.";
+    readyDot.dataset.state = r.providerId ? "active" : "idle";
+    oneClick.disabled = !r.providerId;
   } catch {
     providerBadge.textContent = "not on a supported site";
     providerBadge.dataset.state = "idle";
+    readyTitle.textContent = "Open a supported AI chat";
+    readyDesc.textContent = "Go to ChatGPT, Claude, Gemini, or Perplexity, then open ContextPassport again.";
+    readyDot.dataset.state = "idle";
+    oneClick.disabled = true;
   }
 
   const healthBadge = document.getElementById("cp-health-badge") as HTMLSpanElement;
@@ -93,6 +108,40 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     inject: (text) => sendToActiveTab<null>({ type: "INJECT_INTO_ACTIVE_TAB", text }),
   });
 
+  oneClick.addEventListener("click", async () => {
+    const projectId = projectPicker.activeProjectId();
+    if (!projectId) {
+      setStatus(oneClickStatus, "Pick or create a project first.", "error");
+      return;
+    }
+    oneClick.disabled = true;
+    setStatus(oneClickStatus, "Capturing this page locally…");
+    try {
+      const captured = await sendToActiveTab<{ conversation: { turns: unknown[] } }>({ type: "CAPTURE_ACTIVE_TAB", projectId });
+      await projectPicker.refresh();
+      await refreshHealth(projectPicker.activeProjectId());
+      const project = await projects.get(projectId);
+      if (!project) throw new Error("Project not found after capture.");
+      const mode = (document.getElementById("cp-mode") as HTMLSelectElement).value || "balanced";
+      const rendered = continuity.render(mode, {
+        projectName: project.name,
+        projectDescription: project.description,
+        passport: project.passport,
+        intelligence: project.intelligence,
+        memory: project.memory,
+        ...(activeProviderId ? { targetProviderId: activeProviderId } : {}),
+      });
+      if (!rendered.ok) throw new Error(rendered.error.message);
+      setStatus(oneClickStatus, `Captured ${captured.conversation.turns.length} turns. Pasting handoff…`);
+      await sendToActiveTab<null>({ type: "INJECT_INTO_ACTIVE_TAB", text: rendered.value.text });
+      setStatus(oneClickStatus, `✓ Captured and pasted ${rendered.value.stats.chars} characters. Review, then press Send.`, "success");
+    } catch (e) {
+      setStatus(oneClickStatus, friendlyError(e), "error");
+    } finally {
+      oneClick.disabled = !activeProviderId;
+    }
+  });
+
   document.getElementById("cp-options")?.addEventListener("click", (e) => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
@@ -105,6 +154,23 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+function providerLabel(id: string): string {
+  return ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", perplexity: "Perplexity" } as Record<string, string>)[id] ?? id;
+}
+
+function setStatus(el: HTMLParagraphElement, text: string, state: "success" | "error" | "" = ""): void {
+  el.textContent = text;
+  el.dataset.state = state;
+}
+
+function friendlyError(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  if (/receiving end|could not establish connection/i.test(message)) {
+    return "Could not connect to this AI page. Reload the tab once, then try again.";
+  }
+  return message;
 }
 
 async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagService").FeatureFlagService): Promise<void> {

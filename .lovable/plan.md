@@ -1,47 +1,32 @@
-## Problem
+Plan to make the Chrome extension actually work from the first click:
 
-When the popup opens, the "Delete all ContextPassport data?" modal (and the onboarding modal) render on top of the UI. Clicking Cancel, Close, or Confirm appears to do nothing — the modal never disappears.
+1. Fix the connection failure
+- Add a safe popup helper that detects the active tab URL before sending messages.
+- If Chrome says “Receiving end does not exist,” automatically inject the content script into the current supported AI page, then retry capture/paste.
+- Show a clear status when the page is unsupported, still loading, or protected by Chrome so the user is not left with a broken error.
 
-## Root cause
+2. Make capture and paste reliable on real AI sites
+- Update provider adapters for ChatGPT, Claude, Gemini, and Perplexity with more current selectors for conversation turns and composer fields.
+- Improve text insertion so React/ProseMirror-style editors receive focus, input, paste/input events, and keep the inserted text visible.
+- Add Perplexity to the default enabled provider flags so it does not silently fail.
 
-In `extension/src/ui/tokens.css` the modal backdrop rule is:
+3. Make it one-click
+- Replace the confusing separate “Capture this conversation” and “Paste summary into this tab” flow with a primary action:
+  - On a supported AI conversation: “Capture context”
+  - After context exists: “Continue here”
+  - Optional combined action: “Capture & paste handoff” when useful
+- Keep advanced project/mode controls available, but visually secondary/collapsed.
 
-```css
-.cp-modal-backdrop {
-  display: flex;
-  ...
-}
-```
+4. Add an on-page quick widget so users do not open the full popup every time
+- Add a small floating ContextPassport button on supported AI pages.
+- The widget will offer quick actions: Capture, Continue here, and Open full controls.
+- It will use the active project automatically, creating “My first project” if none exists.
 
-An explicit `display: flex` beats the browser's default `[hidden] { display: none }`. So even though the HTML has `hidden` on `#cp-onboarding` and `#cp-erase-modal`, and the JS in `popup/main.ts` toggles `modal.hidden = true/false` correctly, the CSS keeps both modals visible at all times. The Cancel/Close/Confirm handlers do run and do set `hidden`, but the user sees no change.
+5. Improve popup UI/UX
+- Put the provider/site status at the top with actionable labels: Ready on ChatGPT, Open an AI chat, Reload this tab, etc.
+- Add success states that say exactly what happened: captured turns, saved locally, pasted into composer.
+- Reduce visual clutter by moving health recommendations and privacy details into collapsible sections.
 
-This also explains why the popup appears to open on the delete screen: the erase modal is stacked over the normal popup content from the first paint.
-
-## Fix (CSS only, one rule)
-
-Add a hidden-state override so the attribute wins:
-
-```css
-.cp-modal-backdrop[hidden] { display: none; }
-```
-
-Location: `extension/src/ui/tokens.css`, in the Modal section around line 395.
-
-No JS, HTML, or business-logic changes — the existing `wireEraseFlow` / `maybeShowOnboarding` logic in `extension/src/popup/main.ts` is already correct.
-
-## Verification
-
-1. Rebuild the extension and repackage `public/contextpassport.zip`.
-2. Open the popup on a fresh profile:
-   - Onboarding modal shows once. "Got it — let's go" closes it and does not reappear on later opens.
-   - Main popup (Active project / Capture / Continue / Privacy panel) is the default view.
-3. Click "Delete my data" (in onboarding or in the Privacy panel):
-   - Confirmation modal opens with the live inventory.
-   - **Cancel** closes it.
-   - Clicking the backdrop closes it.
-   - **Yes, delete everything** runs `EraseService.eraseAll()`, shows the ✓ success summary, and **Close** dismisses the modal.
-4. Reopen the popup — it opens directly on the Capture view, as expected.
-
-## Out of scope
-
-No changes to `EraseService`, storage, feature flags, or any other functionality — the deletion engine itself already works; it was just visually masked by the stuck modal.
+6. Verify and package
+- Add/adjust tests for message retry, provider defaults, and adapter behavior where possible.
+- Rebuild the extension and repackage the downloadable zip so loading the updated extension in Chrome uses the fixed files.
