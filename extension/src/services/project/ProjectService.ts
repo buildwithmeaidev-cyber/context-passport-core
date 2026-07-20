@@ -76,16 +76,30 @@ export class ProjectService {
     const project = await this.get(projectId);
     if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
 
+    // Cross-capture dedup: drop turns that already appeared verbatim in any
+    // prior capture of the same project. Fixes the "same old context keeps
+    // getting re-captured" complaint when re-running on a long conversation.
+    const seen = new Set<string>();
+    for (const cap of project.captures) {
+      for (const t of cap.turns) seen.add(turnKey(t.role, t.text));
+    }
+    const freshTurns = captured.turns.filter((t) => {
+      const k = turnKey(t.role, t.text);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
     const capture: Capture = {
       id: crypto.randomUUID(),
       providerId: captured.providerId,
       url: captured.url,
       title: captured.title,
-      turns: captured.turns,
+      turns: freshTurns.length > 0 ? freshTurns : captured.turns, // never store empty
       capturedAt: captured.capturedAt,
     };
 
-    const facets = extractFacets(captured.turns, {
+    const facets = extractFacets(capture.turns, {
       captureId: capture.id,
       providerId: captured.providerId,
       capturedAt: captured.capturedAt,
@@ -94,7 +108,7 @@ export class ProjectService {
     const merged = mergePassport(project.passport as ContextPassport, facets);
     const captures = [capture, ...project.captures].slice(0, MAX_CAPTURES_PER_PROJECT);
     const intelligence = this.intelligence
-      ? this.intelligence.enrich(project.intelligence, captured.turns, Date.now())
+      ? this.intelligence.enrich(project.intelligence, capture.turns, Date.now())
       : project.intelligence;
 
     const next: Project = {
@@ -107,6 +121,34 @@ export class ProjectService {
     const w = await this.replace(next);
     if (!w.ok) return err(w.error);
     return ok(next);
+  }
+
+  async renameCapture(projectId: string, captureId: string, title: string): Promise<Result<true>> {
+    const name = title.trim();
+    if (!name) return err(appError("VALIDATION", "Title cannot be empty"));
+    return this.mutate(projectId, (p) => ({
+      ...p,
+      captures: p.captures.map((c) => (c.id === captureId ? { ...c, title: name } : c)),
+      updatedAt: Date.now(),
+    }));
+  }
+
+  async removeCapture(projectId: string, captureId: string): Promise<Result<true>> {
+    return this.mutate(projectId, (p) => {
+      // Also purge facets that originated from this capture (non-pinned).
+      const passport = { ...p.passport } as Project["passport"];
+      for (const field of Object.values(FACET_TO_FIELD)) {
+        passport[field] = passport[field].filter(
+          (f) => f.source.captureId !== captureId || f.pinned,
+        );
+      }
+      return {
+        ...p,
+        captures: p.captures.filter((c) => c.id !== captureId),
+        passport,
+        updatedAt: Date.now(),
+      };
+    });
   }
 
   async pinFacet(projectId: string, facetId: string, pinned: boolean): Promise<Result<true>> {
