@@ -85,6 +85,29 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     await refreshHealth(projectPicker.activeProjectId());
   });
 
+  const captureSwitcher = wireCaptureSwitcher({
+    section: document.getElementById("cp-captures-section") as HTMLElement,
+    select: document.getElementById("cp-capture-select") as HTMLSelectElement,
+    meta: document.getElementById("cp-capture-meta") as HTMLParagraphElement,
+    pasteBtn: document.getElementById("cp-capture-paste") as HTMLButtonElement,
+    renameBtn: document.getElementById("cp-capture-rename") as HTMLButtonElement,
+    deleteBtn: document.getElementById("cp-capture-delete") as HTMLButtonElement,
+    status: document.getElementById("cp-capture-switch-status") as HTMLParagraphElement,
+    projects,
+    continuity,
+    getProjectId: () => projectPicker.activeProjectId(),
+    getTargetProvider: () => activeProviderId,
+    getMode: () => (document.getElementById("cp-mode") as HTMLSelectElement | null)?.value || "balanced",
+    inject: (text) => sendToActiveTab<null>({ type: "INJECT_INTO_ACTIVE_TAB", text }),
+    afterMutate: async () => {
+      await projectPicker.refresh();
+      await refreshHealth(projectPicker.activeProjectId());
+    },
+  });
+  await captureSwitcher.refresh();
+  (document.getElementById("cp-project") as HTMLSelectElement)
+    .addEventListener("change", () => captureSwitcher.refresh());
+
   renderCapture({
     button: document.getElementById("cp-capture") as HTMLButtonElement,
     status: document.getElementById("cp-capture-status") as HTMLParagraphElement,
