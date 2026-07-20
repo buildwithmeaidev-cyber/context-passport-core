@@ -144,6 +144,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
       const captured = await sendToActiveTab<{ conversation: { turns: unknown[] } }>({ type: "CAPTURE_ACTIVE_TAB", projectId });
       await projectPicker.refresh();
       await refreshHealth(projectPicker.activeProjectId());
+      await captureSwitcher.refresh();
       const project = await projects.get(projectId);
       if (!project) throw new Error("Project not found after capture.");
       const mode = (document.getElementById("cp-mode") as HTMLSelectElement).value || "balanced";
