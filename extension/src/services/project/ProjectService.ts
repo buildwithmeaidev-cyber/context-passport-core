@@ -248,3 +248,7 @@ function capFacet(items: FacetItem[], max: number): FacetItem[] {
 function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\w\s]/g, "").trim();
 }
+
+function turnKey(role: string, text: string): string {
+  return `${role}::${normalize(text)}`;
+}
