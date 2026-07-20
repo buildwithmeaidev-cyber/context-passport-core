@@ -25,9 +25,23 @@ export class ContinuityService {
       return err(appError("PREMIUM_REQUIRED", `Mode "${strat.label}" requires Pro.`));
     }
     try {
-      return ok(strat.render(input));
+      const scoped = input.captureId
+        ? { ...input, passport: filterPassportByCapture(input.passport, input.captureId) }
+        : input;
+      return ok(strat.render(scoped));
     } catch (e) {
       return err(appError("UNKNOWN", "Render failed", e));
     }
   }
+}
+
+function filterPassportByCapture(
+  passport: RenderInput["passport"],
+  captureId: string,
+): RenderInput["passport"] {
+  const out = {} as RenderInput["passport"];
+  for (const key of Object.keys(passport) as (keyof RenderInput["passport"])[]) {
+    out[key] = passport[key].filter((f) => f.source.captureId === captureId || f.pinned);
+  }
+  return out;
 }

@@ -13,6 +13,8 @@ export interface RenderInput {
   intelligence?: ProjectIntelligence;
   /** Persistent project memory. */
   memory?: ProjectMemoryNote[];
+  /** If set, render only facets whose source.captureId matches (plus pinned). */
+  captureId?: string;
 }
 
 export interface RenderOutput {

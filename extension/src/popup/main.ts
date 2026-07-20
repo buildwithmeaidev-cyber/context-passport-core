@@ -85,6 +85,29 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     await refreshHealth(projectPicker.activeProjectId());
   });
 
+  const captureSwitcher = wireCaptureSwitcher({
+    section: document.getElementById("cp-captures-section") as HTMLElement,
+    select: document.getElementById("cp-capture-select") as HTMLSelectElement,
+    meta: document.getElementById("cp-capture-meta") as HTMLParagraphElement,
+    pasteBtn: document.getElementById("cp-capture-paste") as HTMLButtonElement,
+    renameBtn: document.getElementById("cp-capture-rename") as HTMLButtonElement,
+    deleteBtn: document.getElementById("cp-capture-delete") as HTMLButtonElement,
+    status: document.getElementById("cp-capture-switch-status") as HTMLParagraphElement,
+    projects,
+    continuity,
+    getProjectId: () => projectPicker.activeProjectId(),
+    getTargetProvider: () => activeProviderId,
+    getMode: () => (document.getElementById("cp-mode") as HTMLSelectElement | null)?.value || "balanced",
+    inject: (text) => sendToActiveTab<null>({ type: "INJECT_INTO_ACTIVE_TAB", text }),
+    afterMutate: async () => {
+      await projectPicker.refresh();
+      await refreshHealth(projectPicker.activeProjectId());
+    },
+  });
+  await captureSwitcher.refresh();
+  (document.getElementById("cp-project") as HTMLSelectElement)
+    .addEventListener("change", () => captureSwitcher.refresh());
+
   renderCapture({
     button: document.getElementById("cp-capture") as HTMLButtonElement,
     status: document.getElementById("cp-capture-status") as HTMLParagraphElement,
@@ -93,6 +116,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     afterCapture: async () => {
       await projectPicker.refresh();
       await refreshHealth(projectPicker.activeProjectId());
+      await captureSwitcher.refresh();
     },
   });
 
@@ -120,6 +144,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
       const captured = await sendToActiveTab<{ conversation: { turns: unknown[] } }>({ type: "CAPTURE_ACTIVE_TAB", projectId });
       await projectPicker.refresh();
       await refreshHealth(projectPicker.activeProjectId());
+      await captureSwitcher.refresh();
       const project = await projects.get(projectId);
       if (!project) throw new Error("Project not found after capture.");
       const mode = (document.getElementById("cp-mode") as HTMLSelectElement).value || "balanced";
@@ -313,3 +338,105 @@ function wireEraseFlow(
 }
 
 
+
+interface CaptureSwitcherDeps {
+  section: HTMLElement;
+  select: HTMLSelectElement;
+  meta: HTMLParagraphElement;
+  pasteBtn: HTMLButtonElement;
+  renameBtn: HTMLButtonElement;
+  deleteBtn: HTMLButtonElement;
+  status: HTMLParagraphElement;
+  projects: import("@/services/project/ProjectService").ProjectService;
+  continuity: import("@/services/continuity/ContinuityService").ContinuityService;
+  getProjectId: () => string | null;
+  getTargetProvider: () => string | null;
+  getMode: () => string;
+  inject: (text: string) => Promise<unknown>;
+  afterMutate: () => Promise<void>;
+}
+
+function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promise<void> } {
+  let activeCaptureId: string | null = null;
+
+  async function refresh(): Promise<void> {
+    const projectId = deps.getProjectId();
+    if (!projectId) { deps.section.hidden = true; return; }
+    const project = await deps.projects.get(projectId);
+    if (!project || project.captures.length === 0) {
+      deps.section.hidden = true;
+      return;
+    }
+    deps.section.hidden = false;
+    if (!activeCaptureId || !project.captures.find((c) => c.id === activeCaptureId)) {
+      activeCaptureId = project.captures[0]!.id;
+    }
+    deps.select.innerHTML = project.captures
+      .map((c) => `<option value="${c.id}" ${c.id === activeCaptureId ? "selected" : ""}>${escapeHtml(c.title)}</option>`)
+      .join("");
+    const cur = project.captures.find((c) => c.id === activeCaptureId)!;
+    const when = new Date(cur.capturedAt).toLocaleString();
+    deps.meta.textContent = `${cur.providerId} · ${cur.turns.length} turn${cur.turns.length === 1 ? "" : "s"} · ${when}`;
+  }
+
+  deps.select.addEventListener("change", () => {
+    activeCaptureId = deps.select.value;
+    refresh();
+  });
+
+  deps.renameBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    const project = await deps.projects.get(projectId);
+    const cur = project?.captures.find((c) => c.id === activeCaptureId);
+    const next = prompt("Rename capture:", cur?.title ?? "");
+    if (!next) return;
+    const r = await deps.projects.renameCapture(projectId, activeCaptureId, next);
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    await refresh();
+    await deps.afterMutate();
+    setStatus(deps.status, "✓ Renamed.", "success");
+  });
+
+  deps.deleteBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    if (!confirm("Delete this capture? Facets from it (not pinned) will also be removed.")) return;
+    const r = await deps.projects.removeCapture(projectId, activeCaptureId);
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    activeCaptureId = null;
+    await refresh();
+    await deps.afterMutate();
+    setStatus(deps.status, "✓ Deleted.", "success");
+  });
+
+  deps.pasteBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    const project = await deps.projects.get(projectId);
+    if (!project) return;
+    const target = deps.getTargetProvider();
+    deps.pasteBtn.disabled = true;
+    setStatus(deps.status, "Preparing handoff for this capture…");
+    try {
+      const r = deps.continuity.render(deps.getMode(), {
+        projectName: project.name,
+        projectDescription: project.description,
+        passport: project.passport,
+        intelligence: project.intelligence,
+        memory: project.memory,
+        captureId: activeCaptureId,
+        ...(target ? { targetProviderId: target } : {}),
+      });
+      if (!r.ok) throw new Error(r.error.message);
+      await deps.inject(r.value.text);
+      setStatus(deps.status, `✓ Pasted ${r.value.stats.chars} chars from this capture. Review, then Send.`, "success");
+    } catch (e) {
+      setStatus(deps.status, friendlyError(e), "error");
+    } finally {
+      deps.pasteBtn.disabled = false;
+    }
+  });
+
+  return { refresh };
+}

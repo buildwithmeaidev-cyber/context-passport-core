@@ -19,12 +19,14 @@ export class CaptureService {
     }
     const extracted = adapter.extractConversation();
     if (!extracted.ok) return err(extracted.error);
+    const now = Date.now();
+    const smartTitle = buildCaptureTitle(adapter.label, extracted.value.turns, extracted.value.title, now);
     return ok({
       providerId: adapter.id,
       url,
-      title: extracted.value.title,
+      title: smartTitle,
       turns: extracted.value.turns,
-      capturedAt: Date.now(),
+      capturedAt: now,
     });
   }
 
@@ -35,4 +37,29 @@ export class CaptureService {
     if (!ingest.ok) return err(ingest.error);
     return ok(c.value);
   }
+}
+
+/** Distinct capture name: "ChatGPT · Nov 20, 3:14 PM · <first user prompt excerpt>" */
+function buildCaptureTitle(
+  providerLabel: string,
+  turns: readonly { role: string; text: string }[],
+  fallback: string,
+  at: number,
+): string {
+  const firstUser = turns.find((t) => t.role === "user")?.text?.trim();
+  const firstAny = turns[0]?.text?.trim();
+  const snippet = summarize(firstUser || firstAny || fallback || "conversation", 60);
+  const when = new Date(at).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${providerLabel} · ${when} · ${snippet}`;
+}
+
+function summarize(text: string, max: number): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  if (one.length <= max) return one;
+  return one.slice(0, max - 1).trimEnd() + "…";
 }
