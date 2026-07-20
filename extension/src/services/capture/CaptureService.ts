@@ -19,12 +19,14 @@ export class CaptureService {
     }
     const extracted = adapter.extractConversation();
     if (!extracted.ok) return err(extracted.error);
+    const now = Date.now();
+    const smartTitle = buildCaptureTitle(adapter.label, extracted.value.turns, extracted.value.title, now);
     return ok({
       providerId: adapter.id,
       url,
-      title: extracted.value.title,
+      title: smartTitle,
       turns: extracted.value.turns,
-      capturedAt: Date.now(),
+      capturedAt: now,
     });
   }
 
