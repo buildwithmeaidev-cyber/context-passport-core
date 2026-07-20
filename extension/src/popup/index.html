@@ -81,6 +81,18 @@
       <ul id="cp-health-recs" class="cp-recs"></ul>
     </section>
 
+    <section class="cp-section" id="cp-captures-section" hidden>
+      <label class="cp-label" for="cp-capture-select">Captures in this project</label>
+      <select id="cp-capture-select" class="cp-select"></select>
+      <p id="cp-capture-meta" class="cp-muted"></p>
+      <div class="cp-row" style="gap:6px;flex-wrap:wrap">
+        <button id="cp-capture-paste" class="cp-btn cp-btn-primary" style="flex:1 1 100%">Paste this capture's handoff</button>
+        <button id="cp-capture-rename" class="cp-btn" style="flex:1 1 45%">Rename</button>
+        <button id="cp-capture-delete" class="cp-btn cp-btn-danger-ghost" style="flex:1 1 45%">Delete</button>
+      </div>
+      <p id="cp-capture-status" class="cp-muted"></p>
+    </section>
+
     <details class="cp-section cp-advanced">
       <summary>
         <span class="cp-label" style="margin:0">Advanced controls</span>
