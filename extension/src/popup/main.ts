@@ -116,6 +116,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     afterCapture: async () => {
       await projectPicker.refresh();
       await refreshHealth(projectPicker.activeProjectId());
+      await captureSwitcher.refresh();
     },
   });
 
