@@ -130,5 +130,5 @@ function extractReadablePageText(): string {
   const clone = root.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(noisy).forEach((n) => n.remove());
   const text = cleanText(clone.textContent ?? "");
-  return text.length >= 80 ? text.slice(0, 14000) : "";
+  return text.length >= 80 ? text.slice(0, 40000) : "";
 }
