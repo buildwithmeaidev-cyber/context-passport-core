@@ -338,3 +338,105 @@ function wireEraseFlow(
 }
 
 
+
+interface CaptureSwitcherDeps {
+  section: HTMLElement;
+  select: HTMLSelectElement;
+  meta: HTMLParagraphElement;
+  pasteBtn: HTMLButtonElement;
+  renameBtn: HTMLButtonElement;
+  deleteBtn: HTMLButtonElement;
+  status: HTMLParagraphElement;
+  projects: import("@/services/project/ProjectService").ProjectService;
+  continuity: import("@/services/continuity/ContinuityService").ContinuityService;
+  getProjectId: () => string | null;
+  getTargetProvider: () => string | null;
+  getMode: () => string;
+  inject: (text: string) => Promise<unknown>;
+  afterMutate: () => Promise<void>;
+}
+
+function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promise<void> } {
+  let activeCaptureId: string | null = null;
+
+  async function refresh(): Promise<void> {
+    const projectId = deps.getProjectId();
+    if (!projectId) { deps.section.hidden = true; return; }
+    const project = await deps.projects.get(projectId);
+    if (!project || project.captures.length === 0) {
+      deps.section.hidden = true;
+      return;
+    }
+    deps.section.hidden = false;
+    if (!activeCaptureId || !project.captures.find((c) => c.id === activeCaptureId)) {
+      activeCaptureId = project.captures[0]!.id;
+    }
+    deps.select.innerHTML = project.captures
+      .map((c) => `<option value="${c.id}" ${c.id === activeCaptureId ? "selected" : ""}>${escapeHtml(c.title)}</option>`)
+      .join("");
+    const cur = project.captures.find((c) => c.id === activeCaptureId)!;
+    const when = new Date(cur.capturedAt).toLocaleString();
+    deps.meta.textContent = `${cur.providerId} · ${cur.turns.length} turn${cur.turns.length === 1 ? "" : "s"} · ${when}`;
+  }
+
+  deps.select.addEventListener("change", () => {
+    activeCaptureId = deps.select.value;
+    refresh();
+  });
+
+  deps.renameBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    const project = await deps.projects.get(projectId);
+    const cur = project?.captures.find((c) => c.id === activeCaptureId);
+    const next = prompt("Rename capture:", cur?.title ?? "");
+    if (!next) return;
+    const r = await deps.projects.renameCapture(projectId, activeCaptureId, next);
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    await refresh();
+    await deps.afterMutate();
+    setStatus(deps.status, "✓ Renamed.", "success");
+  });
+
+  deps.deleteBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    if (!confirm("Delete this capture? Facets from it (not pinned) will also be removed.")) return;
+    const r = await deps.projects.removeCapture(projectId, activeCaptureId);
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    activeCaptureId = null;
+    await refresh();
+    await deps.afterMutate();
+    setStatus(deps.status, "✓ Deleted.", "success");
+  });
+
+  deps.pasteBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !activeCaptureId) return;
+    const project = await deps.projects.get(projectId);
+    if (!project) return;
+    const target = deps.getTargetProvider();
+    deps.pasteBtn.disabled = true;
+    setStatus(deps.status, "Preparing handoff for this capture…");
+    try {
+      const r = deps.continuity.render(deps.getMode(), {
+        projectName: project.name,
+        projectDescription: project.description,
+        passport: project.passport,
+        intelligence: project.intelligence,
+        memory: project.memory,
+        captureId: activeCaptureId,
+        ...(target ? { targetProviderId: target } : {}),
+      });
+      if (!r.ok) throw new Error(r.error.message);
+      await deps.inject(r.value.text);
+      setStatus(deps.status, `✓ Pasted ${r.value.stats.chars} chars from this capture. Review, then Send.`, "success");
+    } catch (e) {
+      setStatus(deps.status, friendlyError(e), "error");
+    } finally {
+      deps.pasteBtn.disabled = false;
+    }
+  });
+
+  return { refresh };
+}
