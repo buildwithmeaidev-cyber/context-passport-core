@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CURRENT_VERSION = 3 as const;
+export const CURRENT_VERSION = 4 as const;
 
 export interface Versioned<T> {
   __v: number;
@@ -70,6 +70,8 @@ const captureSchema = z.object({
   title: z.string(),
   turns: z.array(turnSchema),
   capturedAt: z.number(),
+  /** Stable hashes for each stored turn — enables cross-capture dedup that survives DOM drift. */
+  turnHashes: z.array(z.string()).default([]),
 });
 
 const developerInsightsSchema = z.object({
@@ -142,6 +144,14 @@ export const schemas = {
     defaultRenderMode: z.string().default("balanced"),
     theme: z.enum(["system", "light", "dark"]).default("system"),
     onboardingSeenAt: z.number().nullable().default(null),
+    /** Per-project "active capture" lock — subsequent pastes use this capture until changed. */
+    activeCaptureByProject: z.record(z.string(), z.string()).default({}),
+    /** How much of the page to extract each time. */
+    captureMode: z.enum(["full", "since-last", "last-n"]).default("since-last"),
+    /** Only used when captureMode === "last-n". */
+    captureLastN: z.number().int().min(1).max(200).default(20),
+    /** Skip the pre-capture preview modal and capture immediately. */
+    skipCapturePreview: z.boolean().default(false),
   }),
   "flags:overrides": z.record(z.string(), z.boolean()),
   "meta:schemaVersion": z.object({ version: z.number() }),

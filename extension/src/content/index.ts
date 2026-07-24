@@ -34,9 +34,15 @@ import type { ContinuityService } from "@/services/continuity/ContinuityService"
           case "DETECT_ACTIVE_PROVIDER":
             return reply({ ok: true, data: { providerId: adapter?.id ?? null } });
           case "CAPTURE_ACTIVE_TAB": {
-            const r = await capture.captureInto(msg.projectId, location.href);
+            const opts = msg.options ?? { mode: "since-last" as const, lastN: 20 };
+            const r = await capture.captureInto(msg.projectId, location.href, opts);
             if (!r.ok) return reply({ ok: false, error: `${r.error.code}: ${r.error.message}` });
             return reply({ ok: true, data: { conversation: r.value } });
+          }
+          case "PREVIEW_CAPTURE_ACTIVE_TAB": {
+            const r = await capture.preview(msg.projectId, location.href, msg.options);
+            if (!r.ok) return reply({ ok: false, error: `${r.error.code}: ${r.error.message}` });
+            return reply({ ok: true, data: r.value });
           }
           case "INJECT_INTO_ACTIVE_TAB": {
             const r = injection.inject(location.href, msg.text);

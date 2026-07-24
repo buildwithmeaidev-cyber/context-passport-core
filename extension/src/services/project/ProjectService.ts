@@ -6,6 +6,7 @@ import { extractFacets } from "@/core/extractFacets";
 import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
+import { hashTurn } from "@/core/hashTurn";
 
 const MAX_CAPTURES_PER_PROJECT = 50;
 
@@ -76,27 +77,43 @@ export class ProjectService {
     const project = await this.get(projectId);
     if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
 
-    // Cross-capture dedup: drop turns that already appeared verbatim in any
-    // prior capture of the same project. Fixes the "same old context keeps
-    // getting re-captured" complaint when re-running on a long conversation.
+    // Cross-capture dedup using stable FNV-1a hashes stored on each capture.
+    // Survives DOM drift and repeated old turns across multiple captures.
     const seen = new Set<string>();
     for (const cap of project.captures) {
-      for (const t of cap.turns) seen.add(turnKey(t.role, t.text));
+      if (cap.turnHashes?.length) {
+        for (const h of cap.turnHashes) seen.add(h);
+      } else {
+        for (const t of cap.turns) seen.add(hashTurn(t.role, t.text));
+      }
     }
-    const freshTurns = captured.turns.filter((t) => {
-      const k = turnKey(t.role, t.text);
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const localSeen = new Set<string>();
+    const freshTurns: typeof captured.turns = [];
+    const freshHashes: string[] = [];
+    for (const t of captured.turns) {
+      const h = hashTurn(t.role, t.text);
+      if (localSeen.has(h)) continue;
+      localSeen.add(h);
+      if (seen.has(h)) continue;
+      freshTurns.push(t);
+      freshHashes.push(h);
+    }
+
+    // If CaptureService already filtered (or all turns are new), freshTurns matches captured.turns.
+    // If everything was a duplicate, fall back to storing captured.turns so we never persist an empty capture.
+    const turnsToStore = freshTurns.length > 0 ? freshTurns : captured.turns;
+    const hashesToStore = freshTurns.length > 0
+      ? freshHashes
+      : captured.turns.map((t) => hashTurn(t.role, t.text));
 
     const capture: Capture = {
       id: crypto.randomUUID(),
       providerId: captured.providerId,
       url: captured.url,
       title: captured.title,
-      turns: freshTurns.length > 0 ? freshTurns : captured.turns, // never store empty
+      turns: turnsToStore,
       capturedAt: captured.capturedAt,
+      turnHashes: hashesToStore,
     };
 
     const facets = extractFacets(capture.turns, {
@@ -249,6 +266,3 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\w\s]/g, "").trim();
 }
 
-function turnKey(role: string, text: string): string {
-  return `${role}::${normalize(text)}`;
-}

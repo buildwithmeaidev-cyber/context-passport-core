@@ -1,7 +1,6 @@
 import { buildContainer } from "@/core/composition";
 import { Tokens } from "@/core/tokens";
-import { sendToActiveTab, type DetectResult } from "@/shared/messaging";
-import { renderCapture } from "@/features/capture/captureView";
+import { sendToActiveTab, type DetectResult, type PreviewResult, type CaptureOptions, type CaptureMode } from "@/shared/messaging";
 import { renderInjector } from "@/features/injector/injectorView";
 import { renderProjectPicker } from "@/features/projects/projectPickerView";
 
@@ -14,7 +13,6 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   const flags = container.resolve(Tokens.Flags);
   const erase = container.resolve(Tokens.Erase);
 
-  // ===== Privacy panel + onboarding =====
   await wirePrivacyPanel(flags);
   await maybeShowOnboarding(storage);
 
@@ -63,10 +61,7 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     healthBadge.textContent = `Health ${report.score}/100 · ${report.grade}`;
     healthBadge.dataset.state = report.score >= 70 ? "active" : report.score >= 40 ? "warn" : "bad";
     healthType.textContent = `· detected: ${p.intelligence.conversationType}`;
-    healthRecs.innerHTML = report.recommendations
-      .slice(0, 3)
-      .map((r) => `<li>${escapeHtml(r)}</li>`)
-      .join("");
+    healthRecs.innerHTML = report.recommendations.slice(0, 3).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
   }
 
   const projectPicker = await renderProjectPicker({
@@ -85,16 +80,22 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     await refreshHealth(projectPicker.activeProjectId());
   });
 
+  // Capture-mode picker (Full / Since last / Last N) — persisted in settings.
+  const captureMode = await wireCaptureModePicker(storage);
+
+  // Capture switcher with active-capture lock.
   const captureSwitcher = wireCaptureSwitcher({
     section: document.getElementById("cp-captures-section") as HTMLElement,
     select: document.getElementById("cp-capture-select") as HTMLSelectElement,
     meta: document.getElementById("cp-capture-meta") as HTMLParagraphElement,
+    activateBtn: document.getElementById("cp-capture-activate") as HTMLButtonElement,
     pasteBtn: document.getElementById("cp-capture-paste") as HTMLButtonElement,
     renameBtn: document.getElementById("cp-capture-rename") as HTMLButtonElement,
     deleteBtn: document.getElementById("cp-capture-delete") as HTMLButtonElement,
     status: document.getElementById("cp-capture-switch-status") as HTMLParagraphElement,
     projects,
     continuity,
+    storage,
     getProjectId: () => projectPicker.activeProjectId(),
     getTargetProvider: () => activeProviderId,
     getMode: () => (document.getElementById("cp-mode") as HTMLSelectElement | null)?.value || "balanced",
@@ -108,16 +109,26 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   (document.getElementById("cp-project") as HTMLSelectElement)
     .addEventListener("change", () => captureSwitcher.refresh());
 
-  renderCapture({
-    button: document.getElementById("cp-capture") as HTMLButtonElement,
-    status: document.getElementById("cp-capture-status") as HTMLParagraphElement,
-    getProjectId: () => projectPicker.activeProjectId(),
-    onCapture: (projectId) => sendToActiveTab({ type: "CAPTURE_ACTIVE_TAB", projectId }),
-    afterCapture: async () => {
+  // Advanced "Capture only" button — also routed through preview.
+  const captureBtn = document.getElementById("cp-capture") as HTMLButtonElement;
+  const captureStatus = document.getElementById("cp-capture-status") as HTMLParagraphElement;
+  captureBtn.addEventListener("click", async () => {
+    const projectId = projectPicker.activeProjectId();
+    if (!projectId) { setStatus(captureStatus, "Pick or create a project first.", "error"); return; }
+    captureBtn.disabled = true;
+    setStatus(captureStatus, "Reading this page locally…");
+    try {
+      const captured = await runCaptureWithPreview(projectId, captureMode.get(), storage);
+      if (!captured) { setStatus(captureStatus, "Capture cancelled.", ""); return; }
       await projectPicker.refresh();
-      await refreshHealth(projectPicker.activeProjectId());
+      await refreshHealth(projectId);
       await captureSwitcher.refresh();
-    },
+      setStatus(captureStatus, `✓ Captured ${captured.conversation.turns.length} turns. Saved locally.`, "success");
+    } catch (e) {
+      setStatus(captureStatus, friendlyError(e), "error");
+    } finally {
+      captureBtn.disabled = false;
+    }
   });
 
   await renderInjector({
@@ -134,26 +145,27 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
 
   oneClick.addEventListener("click", async () => {
     const projectId = projectPicker.activeProjectId();
-    if (!projectId) {
-      setStatus(oneClickStatus, "Pick or create a project first.", "error");
-      return;
-    }
+    if (!projectId) { setStatus(oneClickStatus, "Pick or create a project first.", "error"); return; }
     oneClick.disabled = true;
-    setStatus(oneClickStatus, "Capturing this page locally…");
+    setStatus(oneClickStatus, "Reading this page locally…");
     try {
-      const captured = await sendToActiveTab<{ conversation: { turns: unknown[] } }>({ type: "CAPTURE_ACTIVE_TAB", projectId });
+      const captured = await runCaptureWithPreview(projectId, captureMode.get(), storage);
+      if (!captured) { setStatus(oneClickStatus, "Capture cancelled.", ""); return; }
       await projectPicker.refresh();
-      await refreshHealth(projectPicker.activeProjectId());
+      await refreshHealth(projectId);
       await captureSwitcher.refresh();
       const project = await projects.get(projectId);
       if (!project) throw new Error("Project not found after capture.");
       const mode = (document.getElementById("cp-mode") as HTMLSelectElement).value || "balanced";
+      // Respect the active-capture lock: if one is set, scope the paste to it.
+      const activeCaptureId = await getActiveCaptureId(storage, projectId);
       const rendered = continuity.render(mode, {
         projectName: project.name,
         projectDescription: project.description,
         passport: project.passport,
         intelligence: project.intelligence,
         memory: project.memory,
+        ...(activeCaptureId ? { captureId: activeCaptureId } : {}),
         ...(activeProviderId ? { targetProviderId: activeProviderId } : {}),
       });
       if (!rendered.ok) throw new Error(rendered.error.message);
@@ -198,6 +210,160 @@ function friendlyError(e: unknown): string {
   return message;
 }
 
+// ===== Settings helpers =====
+
+type Settings = import("@/storage/schema").DataMap["settings:user"];
+
+const DEFAULT_SETTINGS: Settings = {
+  activeProjectId: null,
+  defaultRenderMode: "balanced",
+  theme: "system",
+  onboardingSeenAt: null,
+  activeCaptureByProject: {},
+  captureMode: "since-last",
+  captureLastN: 20,
+  skipCapturePreview: false,
+};
+
+async function readSettings(storage: import("@/storage/StorageGateway").StorageGateway): Promise<Settings> {
+  const r = await storage.read("settings:user");
+  return r.ok && r.value ? { ...DEFAULT_SETTINGS, ...r.value } : { ...DEFAULT_SETTINGS };
+}
+
+async function writeSettings(storage: import("@/storage/StorageGateway").StorageGateway, patch: Partial<Settings>): Promise<Settings> {
+  const cur = await readSettings(storage);
+  const next: Settings = { ...cur, ...patch };
+  await storage.write("settings:user", next);
+  return next;
+}
+
+async function getActiveCaptureId(storage: import("@/storage/StorageGateway").StorageGateway, projectId: string): Promise<string | null> {
+  const s = await readSettings(storage);
+  return s.activeCaptureByProject[projectId] ?? null;
+}
+
+async function setActiveCaptureId(storage: import("@/storage/StorageGateway").StorageGateway, projectId: string, captureId: string | null): Promise<void> {
+  const s = await readSettings(storage);
+  const map = { ...s.activeCaptureByProject };
+  if (captureId) map[projectId] = captureId; else delete map[projectId];
+  await writeSettings(storage, { activeCaptureByProject: map });
+}
+
+// ===== Capture mode picker =====
+
+async function wireCaptureModePicker(
+  storage: import("@/storage/StorageGateway").StorageGateway,
+): Promise<{ get: () => CaptureOptions }> {
+  const modeSelect = document.getElementById("cp-capture-mode") as HTMLSelectElement;
+  const nInput = document.getElementById("cp-capture-lastn") as HTMLInputElement;
+  const desc = document.getElementById("cp-capture-mode-desc") as HTMLParagraphElement;
+  const s = await readSettings(storage);
+  modeSelect.value = s.captureMode;
+  nInput.value = String(s.captureLastN);
+
+  const descs: Record<CaptureMode, string> = {
+    "since-last": "Only capture turns that aren't already saved. Best when you keep chatting on the same page.",
+    "full": "Capture every turn on screen. Use when starting fresh in a new project.",
+    "last-n": "Only take the most recent N turns. Fastest for very long conversations.",
+  };
+  const sync = () => {
+    const mode = modeSelect.value as CaptureMode;
+    nInput.hidden = mode !== "last-n";
+    desc.textContent = descs[mode];
+  };
+  sync();
+
+  modeSelect.addEventListener("change", async () => {
+    sync();
+    await writeSettings(storage, { captureMode: modeSelect.value as CaptureMode });
+  });
+  nInput.addEventListener("change", async () => {
+    const n = Math.max(1, Math.min(200, parseInt(nInput.value || "20", 10) || 20));
+    nInput.value = String(n);
+    await writeSettings(storage, { captureLastN: n });
+  });
+
+  return {
+    get: (): CaptureOptions => ({
+      mode: modeSelect.value as CaptureMode,
+      lastN: parseInt(nInput.value || "20", 10) || 20,
+    }),
+  };
+}
+
+// ===== Pre-capture preview flow =====
+
+interface CaptureRunResult { conversation: { turns: unknown[] } }
+
+async function runCaptureWithPreview(
+  projectId: string,
+  options: CaptureOptions,
+  storage: import("@/storage/StorageGateway").StorageGateway,
+): Promise<CaptureRunResult | null> {
+  const s = await readSettings(storage);
+  if (s.skipCapturePreview) {
+    return await sendToActiveTab<CaptureRunResult>({ type: "CAPTURE_ACTIVE_TAB", projectId, options });
+  }
+  const preview = await sendToActiveTab<PreviewResult>({ type: "PREVIEW_CAPTURE_ACTIVE_TAB", projectId, options });
+  const confirmed = await showPreviewModal(preview, storage);
+  if (!confirmed) return null;
+  return await sendToActiveTab<CaptureRunResult>({ type: "CAPTURE_ACTIVE_TAB", projectId, options });
+}
+
+async function showPreviewModal(
+  p: PreviewResult,
+  storage: import("@/storage/StorageGateway").StorageGateway,
+): Promise<boolean> {
+  const modal = document.getElementById("cp-preview-modal") as HTMLDivElement;
+  const stats = document.getElementById("cp-prev-stats") as HTMLUListElement;
+  const samples = document.getElementById("cp-prev-samples") as HTMLDivElement;
+  const skip = document.getElementById("cp-prev-skip") as HTMLInputElement;
+  const cancel = document.getElementById("cp-prev-cancel") as HTMLButtonElement;
+  const confirmBtn = document.getElementById("cp-prev-confirm") as HTMLButtonElement;
+
+  stats.innerHTML = [
+    ["Provider detected", p.providerId],
+    ["Turns visible on page", p.extractedTurns],
+    ["Already saved (skipped)", p.droppedDuplicates],
+    ["New turns to save", p.willCapture],
+  ].map(([label, value]) => {
+    const empty = value === 0 || value === "0";
+    return `<li class="cp-erase-row${empty ? " cp-is-empty" : ""}"><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong></li>`;
+  }).join("");
+
+  const sampleHtml = (t: { role: string; text: string } | null) => t
+    ? `<div class="cp-prev-sample"><span class="cp-prev-sample-role">${escapeHtml(t.role)}</span>${escapeHtml(t.text)}</div>`
+    : "";
+  samples.innerHTML = p.willCapture > 0
+    ? `${sampleHtml(p.sampleFirst)}${p.sampleLast && p.willCapture > 1 ? sampleHtml(p.sampleLast) : ""}`
+    : `<div class="cp-prev-sample" style="color:var(--cp-muted)">Nothing new to capture with this mode. Switch to Full or Last N to force a re-capture.</div>`;
+
+  confirmBtn.disabled = p.willCapture === 0;
+  confirmBtn.textContent = p.willCapture === 0 ? "Nothing to capture" : `Capture ${p.willCapture} turn${p.willCapture === 1 ? "" : "s"}`;
+  skip.checked = false;
+  modal.hidden = false;
+
+  return await new Promise<boolean>((resolve) => {
+    const cleanup = () => {
+      modal.hidden = true;
+      cancel.removeEventListener("click", onCancel);
+      confirmBtn.removeEventListener("click", onConfirm);
+      modal.removeEventListener("click", onBackdrop);
+    };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onConfirm = async () => {
+      if (skip.checked) await writeSettings(storage, { skipCapturePreview: true });
+      cleanup(); resolve(true);
+    };
+    const onBackdrop = (e: MouseEvent) => { if (e.target === modal) onCancel(); };
+    cancel.addEventListener("click", onCancel);
+    confirmBtn.addEventListener("click", onConfirm);
+    modal.addEventListener("click", onBackdrop);
+  });
+}
+
+// ===== Privacy + onboarding =====
+
 async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagService").FeatureFlagService): Promise<void> {
   const togStore = document.getElementById("cp-tog-storage") as HTMLInputElement;
   const togInject = document.getElementById("cp-tog-inject") as HTMLInputElement;
@@ -208,8 +374,7 @@ async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagSer
   const sync = () => {
     const s = flags.isEnabled("privacy.allowLocalStorage");
     const i = flags.isEnabled("privacy.allowInjection");
-    togStore.checked = s;
-    togInject.checked = i;
+    togStore.checked = s; togInject.checked = i;
     dotStore.dataset.state = s ? "on" : "off";
     dotInject.dataset.state = i ? "on" : "off";
     const allOn = s && i;
@@ -217,37 +382,26 @@ async function wirePrivacyPanel(flags: import("@/services/license/FeatureFlagSer
     badge.dataset.state = allOn ? "good" : "warn";
   };
   sync();
-  togStore.addEventListener("change", async () => {
-    await flags.set("privacy.allowLocalStorage", togStore.checked);
-    sync();
-  });
-  togInject.addEventListener("change", async () => {
-    await flags.set("privacy.allowInjection", togInject.checked);
-    sync();
-  });
+  togStore.addEventListener("change", async () => { await flags.set("privacy.allowLocalStorage", togStore.checked); sync(); });
+  togInject.addEventListener("change", async () => { await flags.set("privacy.allowInjection", togInject.checked); sync(); });
 }
 
 async function maybeShowOnboarding(storage: import("@/storage/StorageGateway").StorageGateway): Promise<void> {
   const modal = document.getElementById("cp-onboarding") as HTMLDivElement;
   const dismiss = document.getElementById("cp-onb-dismiss") as HTMLButtonElement;
   const eraseBtn = document.getElementById("cp-onb-erase") as HTMLButtonElement;
-  const r = await storage.read("settings:user");
-  const settings = r.ok && r.value
-    ? r.value
-    : { activeProjectId: null, defaultRenderMode: "balanced", theme: "system" as const, onboardingSeenAt: null };
-  eraseBtn.addEventListener("click", () => openEraseModal());
-  if (settings.onboardingSeenAt) return;
+  const s = await readSettings(storage);
+  eraseBtn.addEventListener("click", () => {
+    const em = document.getElementById("cp-erase-modal") as HTMLDivElement;
+    em.hidden = false;
+    em.dispatchEvent(new CustomEvent("cp:open"));
+  });
+  if (s.onboardingSeenAt) return;
   modal.hidden = false;
   dismiss.addEventListener("click", async () => {
     modal.hidden = true;
-    await storage.write("settings:user", { ...settings, onboardingSeenAt: Date.now() });
+    await writeSettings(storage, { onboardingSeenAt: Date.now() });
   });
-}
-
-function openEraseModal(): void {
-  const modal = document.getElementById("cp-erase-modal") as HTMLDivElement;
-  modal.hidden = false;
-  modal.dispatchEvent(new CustomEvent("cp:open"));
 }
 
 function wireEraseFlow(
@@ -257,7 +411,7 @@ function wireEraseFlow(
   const modal = document.getElementById("cp-erase-modal") as HTMLDivElement;
   const openBtn = document.getElementById("cp-erase-open") as HTMLButtonElement;
   const cancel = document.getElementById("cp-erase-cancel") as HTMLButtonElement;
-  const confirm = document.getElementById("cp-erase-confirm") as HTMLButtonElement;
+  const confirmBtn = document.getElementById("cp-erase-confirm") as HTMLButtonElement;
   const close = document.getElementById("cp-erase-close") as HTMLButtonElement;
   const list = document.getElementById("cp-erase-list") as HTMLUListElement;
   const done = document.getElementById("cp-erase-done") as HTMLDivElement;
@@ -265,13 +419,9 @@ function wireEraseFlow(
   const desc = document.getElementById("cp-erase-desc") as HTMLParagraphElement;
 
   const reset = (): void => {
-    done.hidden = true;
-    cancel.hidden = false;
-    confirm.hidden = false;
-    confirm.disabled = false;
-    confirm.textContent = "Yes, delete everything";
-    desc.hidden = false;
-    list.hidden = false;
+    done.hidden = true; cancel.hidden = false; confirmBtn.hidden = false;
+    confirmBtn.disabled = false; confirmBtn.textContent = "Yes, delete everything";
+    desc.hidden = false; list.hidden = false;
   };
 
   const renderPreview = async (): Promise<void> => {
@@ -289,13 +439,8 @@ function wireEraseFlow(
     ];
     list.innerHTML = rows.map(([label, value]) => {
       const empty = value === 0 || value === "none";
-      return `<li class="cp-erase-row${empty ? " cp-is-empty" : ""}">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(String(value))}</strong>
-      </li>`;
-    }).join("") + `<li class="cp-erase-row cp-erase-total">
-        <span>Storage keys to remove</span><strong>${p.totalKeys}</strong>
-      </li>`;
+      return `<li class="cp-erase-row${empty ? " cp-is-empty" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>`;
+    }).join("") + `<li class="cp-erase-row cp-erase-total"><span>Storage keys to remove</span><strong>${p.totalKeys}</strong></li>`;
   };
 
   const close_ = (): void => { modal.hidden = true; };
@@ -306,15 +451,12 @@ function wireEraseFlow(
   close.addEventListener("click", close_);
   modal.addEventListener("click", (e) => { if (e.target === modal) close_(); });
 
-  confirm.addEventListener("click", async () => {
-    confirm.disabled = true;
-    confirm.innerHTML = `<span class="cp-spinner"></span> Deleting…`;
+  confirmBtn.addEventListener("click", async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `<span class="cp-spinner"></span> Deleting…`;
     try {
       const result = await erase.eraseAll();
-      list.hidden = true;
-      desc.hidden = true;
-      cancel.hidden = true;
-      confirm.hidden = true;
+      list.hidden = true; desc.hidden = true; cancel.hidden = true; confirmBtn.hidden = true;
       done.hidden = false;
       const parts: string[] = [];
       if (result.projectsRemoved) parts.push(`${result.projectsRemoved} project${result.projectsRemoved === 1 ? "" : "s"}`);
@@ -329,26 +471,28 @@ function wireEraseFlow(
       summary.textContent = `${body} ${verified}`;
       await afterErase();
     } catch (e) {
-      confirm.disabled = false;
-      confirm.textContent = "Try again";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Try again";
       desc.textContent = `Deletion failed: ${String(e)}. Your data is untouched.`;
       desc.dataset.state = "error";
     }
   });
 }
 
-
+// ===== Capture switcher with active-capture lock =====
 
 interface CaptureSwitcherDeps {
   section: HTMLElement;
   select: HTMLSelectElement;
   meta: HTMLParagraphElement;
+  activateBtn: HTMLButtonElement;
   pasteBtn: HTMLButtonElement;
   renameBtn: HTMLButtonElement;
   deleteBtn: HTMLButtonElement;
   status: HTMLParagraphElement;
   projects: import("@/services/project/ProjectService").ProjectService;
   continuity: import("@/services/continuity/ContinuityService").ContinuityService;
+  storage: import("@/storage/StorageGateway").StorageGateway;
   getProjectId: () => string | null;
   getTargetProvider: () => string | null;
   getMode: () => string;
@@ -357,41 +501,53 @@ interface CaptureSwitcherDeps {
 }
 
 function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promise<void> } {
-  let activeCaptureId: string | null = null;
+  // Browsing selection in the dropdown. Independent from the persisted "active" lock.
+  let browsingCaptureId: string | null = null;
 
   async function refresh(): Promise<void> {
     const projectId = deps.getProjectId();
     if (!projectId) { deps.section.hidden = true; return; }
     const project = await deps.projects.get(projectId);
-    if (!project || project.captures.length === 0) {
-      deps.section.hidden = true;
-      return;
-    }
+    if (!project || project.captures.length === 0) { deps.section.hidden = true; return; }
     deps.section.hidden = false;
-    if (!activeCaptureId || !project.captures.find((c) => c.id === activeCaptureId)) {
-      activeCaptureId = project.captures[0]!.id;
+
+    const activeId = await getActiveCaptureId(deps.storage, projectId);
+    if (!browsingCaptureId || !project.captures.find((c) => c.id === browsingCaptureId)) {
+      browsingCaptureId = activeId ?? project.captures[0]!.id;
     }
-    deps.select.innerHTML = project.captures
-      .map((c) => `<option value="${c.id}" ${c.id === activeCaptureId ? "selected" : ""}>${escapeHtml(c.title)}</option>`)
-      .join("");
-    const cur = project.captures.find((c) => c.id === activeCaptureId)!;
+
+    deps.select.innerHTML = project.captures.map((c) => {
+      const activeSuffix = c.id === activeId ? " · ★ active" : "";
+      return `<option value="${c.id}" ${c.id === browsingCaptureId ? "selected" : ""}>${escapeHtml(c.title)}${activeSuffix}</option>`;
+    }).join("");
+
+    const cur = project.captures.find((c) => c.id === browsingCaptureId)!;
     const when = new Date(cur.capturedAt).toLocaleString();
-    deps.meta.textContent = `${cur.providerId} · ${cur.turns.length} turn${cur.turns.length === 1 ? "" : "s"} · ${when}`;
+    const activePill = cur.id === activeId ? ` <span class="cp-capture-active-pill">ACTIVE LOCK</span>` : "";
+    deps.meta.innerHTML = `${escapeHtml(cur.providerId)} · ${cur.turns.length} turn${cur.turns.length === 1 ? "" : "s"} · ${escapeHtml(when)}${activePill}`;
+
+    deps.activateBtn.disabled = cur.id === activeId;
+    deps.activateBtn.textContent = cur.id === activeId ? "This capture is the active lock" : "Lock as active capture";
   }
 
-  deps.select.addEventListener("change", () => {
-    activeCaptureId = deps.select.value;
-    refresh();
+  deps.select.addEventListener("change", () => { browsingCaptureId = deps.select.value; refresh(); });
+
+  deps.activateBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId || !browsingCaptureId) return;
+    await setActiveCaptureId(deps.storage, projectId, browsingCaptureId);
+    setStatus(deps.status, "✓ Active capture locked. One-click paste and this section will use this capture until you change it.", "success");
+    await refresh();
   });
 
   deps.renameBtn.addEventListener("click", async () => {
     const projectId = deps.getProjectId();
-    if (!projectId || !activeCaptureId) return;
+    if (!projectId || !browsingCaptureId) return;
     const project = await deps.projects.get(projectId);
-    const cur = project?.captures.find((c) => c.id === activeCaptureId);
+    const cur = project?.captures.find((c) => c.id === browsingCaptureId);
     const next = prompt("Rename capture:", cur?.title ?? "");
     if (!next) return;
-    const r = await deps.projects.renameCapture(projectId, activeCaptureId, next);
+    const r = await deps.projects.renameCapture(projectId, browsingCaptureId, next);
     if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
     await refresh();
     await deps.afterMutate();
@@ -400,11 +556,13 @@ function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promis
 
   deps.deleteBtn.addEventListener("click", async () => {
     const projectId = deps.getProjectId();
-    if (!projectId || !activeCaptureId) return;
+    if (!projectId || !browsingCaptureId) return;
     if (!confirm("Delete this capture? Facets from it (not pinned) will also be removed.")) return;
-    const r = await deps.projects.removeCapture(projectId, activeCaptureId);
+    const r = await deps.projects.removeCapture(projectId, browsingCaptureId);
     if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
-    activeCaptureId = null;
+    const activeId = await getActiveCaptureId(deps.storage, projectId);
+    if (activeId === browsingCaptureId) await setActiveCaptureId(deps.storage, projectId, null);
+    browsingCaptureId = null;
     await refresh();
     await deps.afterMutate();
     setStatus(deps.status, "✓ Deleted.", "success");
@@ -412,7 +570,7 @@ function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promis
 
   deps.pasteBtn.addEventListener("click", async () => {
     const projectId = deps.getProjectId();
-    if (!projectId || !activeCaptureId) return;
+    if (!projectId || !browsingCaptureId) return;
     const project = await deps.projects.get(projectId);
     if (!project) return;
     const target = deps.getTargetProvider();
@@ -425,7 +583,7 @@ function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promis
         passport: project.passport,
         intelligence: project.intelligence,
         memory: project.memory,
-        captureId: activeCaptureId,
+        captureId: browsingCaptureId,
         ...(target ? { targetProviderId: target } : {}),
       });
       if (!r.ok) throw new Error(r.error.message);
