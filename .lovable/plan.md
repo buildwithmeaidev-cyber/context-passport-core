@@ -1,32 +1,72 @@
-Plan to make the Chrome extension actually work from the first click:
+## Goal
 
-1. Fix the connection failure
-- Add a safe popup helper that detects the active tab URL before sending messages.
-- If Chrome says “Receiving end does not exist,” automatically inject the content script into the current supported AI page, then retry capture/paste.
-- Show a clear status when the page is unsupported, still loading, or protected by Chrome so the user is not left with a broken error.
+Make capture predictable and non-repeating:
+1. **Active-capture lock** — once you pick a capture in the switcher, all pastes use only that capture until you explicitly switch (or capture a new one).
+2. **Capture mode switch** — choose how much of the chat to extract: Full chat, New since last capture, or Last N turns.
+3. **Stronger per-turn dedup** — repeated old turns never reappear across captures, even if the DOM shifts.
+4. **Preview before confirm** — show which turns and how many will be saved before the capture is written.
 
-2. Make capture and paste reliable on real AI sites
-- Update provider adapters for ChatGPT, Claude, Gemini, and Perplexity with more current selectors for conversation turns and composer fields.
-- Improve text insertion so React/ProseMirror-style editors receive focus, input, paste/input events, and keep the inserted text visible.
-- Add Perplexity to the default enabled provider flags so it does not silently fail.
+## Changes
 
-3. Make it one-click
-- Replace the confusing separate “Capture this conversation” and “Paste summary into this tab” flow with a primary action:
-  - On a supported AI conversation: “Capture context”
-  - After context exists: “Continue here”
-  - Optional combined action: “Capture & paste handoff” when useful
-- Keep advanced project/mode controls available, but visually secondary/collapsed.
+### 1. Active-capture lock
+- Add `activeCaptureId?: string` to the `settings:user` schema (per-project map: `{ [projectId]: captureId }`) in `extension/src/storage/schema.ts` (bump migration).
+- `ProjectService`: add `setActiveCapture(projectId, captureId | null)` and `getActiveCapture(projectId)`.
+- `popup/main.ts`:
+  - When the user picks a capture in the switcher, persist it as active + show a small "🔒 Locked to this capture" chip in the hero.
+  - The one-click **Capture & paste handoff** and the Advanced **Paste saved handoff** both honor the lock: they render with `captureId = activeCaptureId` when set.
+  - Chip has an "Unlock" affordance; a fresh capture auto-locks to the new capture.
+- `ContinuityService` already supports a `captureId` filter — reuse it.
 
-4. Add an on-page quick widget so users do not open the full popup every time
-- Add a small floating ContextPassport button on supported AI pages.
-- The widget will offer quick actions: Capture, Continue here, and Open full controls.
-- It will use the active project automatically, creating “My first project” if none exists.
+### 2. Capture mode switch
+- New enum `CaptureMode = "full" | "sinceLast" | "lastN"`, stored per-project in settings with an `n` value (default 20).
+- Popup UI: small segmented control under the one-click button (Full · New · Last N) plus a compact number input when Last N is chosen. Persisted between opens.
+- `CaptureService.capture(url, { mode, n, sinceCaptureId })`:
+  - `full` — current behavior.
+  - `lastN` — slice `turns.slice(-n)` after extraction.
+  - `sinceLast` — drop any turn whose key matches turns of the most recent capture on the same URL/provider (uses new registry below).
 
-5. Improve popup UI/UX
-- Put the provider/site status at the top with actionable labels: Ready on ChatGPT, Open an AI chat, Reload this tab, etc.
-- Add success states that say exactly what happened: captured turns, saved locally, pasted into composer.
-- Reduce visual clutter by moving health recommendations and privacy details into collapsible sections.
+### 3. Stronger per-turn dedup registry
+- New storage key `turnRegistry:v1` (Map keyed by `projectId` → `Set<hash>` serialized as arrays, capped ~5k entries with FIFO eviction).
+- Hash = `sha1(role + "::" + normalize(text))` where `normalize` collapses whitespace, lowercases, strips markdown/punctuation, and clips to first 400 chars (so trivial edits still collide).
+- `ProjectService.ingestCapture`:
+  - Load registry for the project, filter `captured.turns` before storing.
+  - Add new hashes to the registry, persist.
+  - Keeps working across DOM changes because the hash is on rendered text, not DOM identity.
+- Remove the current in-memory `seen` loop; it's superseded.
 
-6. Verify and package
-- Add/adjust tests for message retry, provider defaults, and adapter behavior where possible.
-- Rebuild the extension and repackage the downloadable zip so loading the updated extension in Chrome uses the fixed files.
+### 4. Preview step
+- New message `PREVIEW_CAPTURE` in `shared/messaging.ts` — content script returns `{ turns, totalBeforeFilters, droppedDuplicates, droppedByMode }` without writing anything.
+- Add `CaptureService.preview(url, opts)` that runs extraction + mode filter + dedup dry-run.
+- Popup: clicking Capture opens a lightweight modal (`#cp-preview-modal`) showing:
+  - Provider · Mode · Turn count (kept / dropped duplicates / dropped by mode)
+  - Scrollable list of the first ~10 turns with role badges + truncated text
+  - Buttons: **Confirm capture**, **Cancel**, and a "Skip preview next time" checkbox (stored in settings).
+- One-click flow: preview → confirm → capture → render → inject (still one click if "Skip preview" is on).
+
+## Technical notes
+
+- Storage bump: `settings:user` v-next adds `activeCaptureByProject`, `captureMode`, `captureLastN`, `skipCapturePreview`. Migration is additive (defaults filled in).
+- New key `turnRegistry:v1` is separate so it can be wiped independently and doesn't bloat the projects blob.
+- `EraseService.preview()` and `eraseAll()` must include `turnRegistry:v1` in the inventory and wipe.
+- Tests to add under `extension/tests/`:
+  - `captureModes.test.ts` — full/sinceLast/lastN behavior.
+  - `turnRegistry.test.ts` — dedup across two captures with reshuffled DOM.
+  - `activeCaptureLock.test.ts` — lock persists, paste uses locked capture, new capture re-locks.
+
+## Files touched
+
+- `extension/src/storage/schema.ts` (+ migration)
+- `extension/src/services/capture/CaptureService.ts`
+- `extension/src/services/project/ProjectService.ts`
+- `extension/src/services/privacy/EraseService.ts`
+- `extension/src/shared/messaging.ts`
+- `extension/src/content/index.ts` (handle `PREVIEW_CAPTURE`)
+- `extension/src/popup/index.html` + `popup/main.ts`
+- `extension/src/features/capture/captureView.ts`
+- `extension/src/ui/tokens.css` (modal + segmented control + lock chip)
+- `extension/tests/*` (new)
+
+## Out of scope
+
+- No changes to landing page, providers' selectors, or continuity render strategies beyond passing `captureId`.
+- No new premium gating.
