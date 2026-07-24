@@ -538,3 +538,27 @@ code {
   font-size: 20px; font-weight: 600;
   border: 1px solid color-mix(in oklab, var(--cp-success) 40%, transparent);
 }
+
+/* Preview modal samples + capture-active badge */
+.cp-prev-samples { display: grid; gap: 8px; margin: 10px 0 0; }
+.cp-prev-sample {
+  padding: 8px 10px; border-radius: var(--cp-radius-sm);
+  border: 1px solid var(--cp-border); background: var(--cp-bg);
+  font: 500 11.5px/1.4 Inter, system-ui;
+  color: var(--cp-text);
+}
+.cp-prev-sample-role {
+  display: inline-block; margin-right: 6px;
+  padding: 1px 6px; border-radius: 999px;
+  background: color-mix(in oklab, var(--cp-primary) 20%, transparent);
+  color: var(--cp-text);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.cp-capture-active-pill {
+  display: inline-block; margin-left: 6px;
+  padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in oklab, var(--cp-success) 18%, transparent);
+  color: var(--cp-success);
+  border: 1px solid color-mix(in oklab, var(--cp-success) 40%, transparent);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+}
