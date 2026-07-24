@@ -70,6 +70,8 @@ const captureSchema = z.object({
   title: z.string(),
   turns: z.array(turnSchema),
   capturedAt: z.number(),
+  /** Stable hashes for each stored turn — enables cross-capture dedup that survives DOM drift. */
+  turnHashes: z.array(z.string()).default([]),
 });
 
 const developerInsightsSchema = z.object({
