@@ -104,12 +104,45 @@
       <select id="cp-capture-select" class="cp-select"></select>
       <p id="cp-capture-meta" class="cp-muted"></p>
       <div class="cp-row" style="gap:6px;flex-wrap:wrap">
+        <button id="cp-capture-activate" class="cp-btn" style="flex:1 1 100%">Lock as active capture</button>
         <button id="cp-capture-paste" class="cp-btn cp-btn-primary" style="flex:1 1 100%">Paste this capture's handoff</button>
         <button id="cp-capture-rename" class="cp-btn" style="flex:1 1 45%">Rename</button>
         <button id="cp-capture-delete" class="cp-btn cp-btn-danger-ghost" style="flex:1 1 45%">Delete</button>
       </div>
       <p id="cp-capture-switch-status" class="cp-muted"></p>
     </section>
+
+    <section class="cp-section">
+      <label class="cp-label" for="cp-capture-mode">Capture mode</label>
+      <div class="cp-row">
+        <select id="cp-capture-mode" class="cp-select">
+          <option value="since-last">New since last capture (recommended)</option>
+          <option value="full">Full conversation</option>
+          <option value="last-n">Last N turns…</option>
+        </select>
+        <input id="cp-capture-lastn" type="number" min="1" max="200" value="20" class="cp-select" style="width:70px" hidden />
+      </div>
+      <p id="cp-capture-mode-desc" class="cp-muted"></p>
+    </section>
+
+    <details class="cp-section cp-advanced">
+      <summary>
+        <span class="cp-label" style="margin:0">Advanced controls</span>
+        <span class="cp-muted">capture or paste separately</span>
+      </summary>
+      <div class="cp-advanced-body">
+        <button id="cp-capture" class="cp-btn">Capture only</button>
+        <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">Saves a structured summary on this device. Nothing is uploaded.</p>
+        <p id="cp-capture-status" class="cp-muted"></p>
+
+        <label class="cp-label cp-label-spaced" for="cp-mode">Continue mode</label>
+        <select id="cp-mode" class="cp-select"></select>
+        <p id="cp-mode-desc" class="cp-muted"></p>
+        <button id="cp-inject" class="cp-btn">Paste saved handoff only</button>
+        <p class="cp-muted" style="margin:6px 0 0;font-size:11.5px">You review and press Send yourself. Nothing is sent automatically.</p>
+        <p id="cp-inject-status" class="cp-muted"></p>
+      </div>
+    </details>
 
     <details class="cp-section cp-advanced">
       <summary>
