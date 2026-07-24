@@ -57,9 +57,16 @@ const v2ToV3 = (key: string, v: Versioned<unknown>): Versioned<unknown> => {
   return { __v: 3, data: v.data };
 };
 
+// v3 -> v4: captures gain `turnHashes`; settings gain capture-mode + active-capture-lock.
+// Zod defaults fill any missing fields on read, so this is a pass-through bump.
+const v3ToV4 = (_key: string, v: Versioned<unknown>): Versioned<unknown> => {
+  return { __v: 4, data: v.data };
+};
+
 export const migrations: Record<number, (key: string, value: Versioned<unknown>) => Versioned<unknown>> = {
   1: v1ToV2,
   2: v2ToV3,
+  3: v3ToV4,
 };
 
 /** One-shot import called by background onInstalled when bumping from v1. */
