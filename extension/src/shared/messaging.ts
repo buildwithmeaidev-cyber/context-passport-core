@@ -1,8 +1,16 @@
 // Cross-runtime message contract.
 import type { CapturedConversation } from "@/core/tokens";
 
+export type CaptureMode = "full" | "since-last" | "last-n";
+
+export interface CaptureOptions {
+  mode: CaptureMode;
+  lastN: number;
+}
+
 export type RuntimeMessage =
-  | { type: "CAPTURE_ACTIVE_TAB"; projectId: string }
+  | { type: "CAPTURE_ACTIVE_TAB"; projectId: string; options?: CaptureOptions }
+  | { type: "PREVIEW_CAPTURE_ACTIVE_TAB"; projectId: string; options: CaptureOptions }
   | { type: "INJECT_INTO_ACTIVE_TAB"; text: string }
   | { type: "DETECT_ACTIVE_PROVIDER" };
 
@@ -15,6 +23,15 @@ export interface CaptureResult {
 }
 export interface DetectResult {
   providerId: string | null;
+}
+export interface PreviewResult {
+  providerId: string;
+  extractedTurns: number;
+  freshTurns: number;
+  droppedDuplicates: number;
+  willCapture: number;
+  sampleFirst: { role: string; text: string } | null;
+  sampleLast: { role: string; text: string } | null;
 }
 
 export async function sendToActiveTab<T = unknown>(message: RuntimeMessage): Promise<T> {
