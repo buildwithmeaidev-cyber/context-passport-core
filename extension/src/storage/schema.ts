@@ -144,6 +144,14 @@ export const schemas = {
     defaultRenderMode: z.string().default("balanced"),
     theme: z.enum(["system", "light", "dark"]).default("system"),
     onboardingSeenAt: z.number().nullable().default(null),
+    /** Per-project "active capture" lock — subsequent pastes use this capture until changed. */
+    activeCaptureByProject: z.record(z.string(), z.string()).default({}),
+    /** How much of the page to extract each time. */
+    captureMode: z.enum(["full", "since-last", "last-n"]).default("since-last"),
+    /** Only used when captureMode === "last-n". */
+    captureLastN: z.number().int().min(1).max(200).default(20),
+    /** Skip the pre-capture preview modal and capture immediately. */
+    skipCapturePreview: z.boolean().default(false),
   }),
   "flags:overrides": z.record(z.string(), z.boolean()),
   "meta:schemaVersion": z.object({ version: z.number() }),
