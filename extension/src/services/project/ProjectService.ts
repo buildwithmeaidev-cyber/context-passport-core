@@ -6,6 +6,7 @@ import { extractFacets } from "@/core/extractFacets";
 import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
+import { hashTurn } from "@/core/hashTurn";
 
 const MAX_CAPTURES_PER_PROJECT = 50;
 
