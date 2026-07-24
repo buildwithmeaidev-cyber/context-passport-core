@@ -49,6 +49,24 @@
       </div>
     </div>
 
+    <!-- Pre-capture preview modal -->
+    <div id="cp-preview-modal" class="cp-modal-backdrop" hidden>
+      <div class="cp-modal" role="dialog" aria-labelledby="cp-prev-title">
+        <h2 id="cp-prev-title">Ready to capture</h2>
+        <p class="cp-muted" style="margin:6px 0 12px">Review what will be saved before it lands in your project.</p>
+        <ul class="cp-erase-list" id="cp-prev-stats"></ul>
+        <div id="cp-prev-samples" class="cp-prev-samples"></div>
+        <label class="cp-toggle" style="margin-top:10px">
+          <input type="checkbox" id="cp-prev-skip" />
+          <span>Skip this preview next time</span>
+        </label>
+        <div class="cp-modal-actions">
+          <button id="cp-prev-cancel" class="cp-btn">Cancel</button>
+          <button id="cp-prev-confirm" class="cp-btn cp-btn-primary">Capture now</button>
+        </div>
+      </div>
+    </div>
+
     <header class="cp-header">
       <h1>ContextPassport</h1>
       <span id="cp-provider" class="cp-badge">detecting…</span>
