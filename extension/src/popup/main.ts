@@ -1,6 +1,6 @@
 import { buildContainer } from "@/core/composition";
 import { Tokens } from "@/core/tokens";
-import { sendToActiveTab, type DetectResult } from "@/shared/messaging";
+import { sendToActiveTab, type DetectResult, type PreviewResult, type CaptureOptions, type CaptureMode } from "@/shared/messaging";
 import { renderCapture } from "@/features/capture/captureView";
 import { renderInjector } from "@/features/injector/injectorView";
 import { renderProjectPicker } from "@/features/projects/projectPickerView";
