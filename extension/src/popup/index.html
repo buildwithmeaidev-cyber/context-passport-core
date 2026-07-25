@@ -27,8 +27,8 @@
 
     <!-- Delete-my-data confirmation modal -->
     <div id="cp-erase-modal" class="cp-modal-backdrop" hidden>
-      <div class="cp-modal" role="dialog" aria-labelledby="cp-erase-title" aria-describedby="cp-erase-desc">
-        <h2 id="cp-erase-title">Delete all ContextPassport data?</h2>
+      <div class="cp-modal" role="dialog" aria-modal="true" aria-labelledby="cp-erase-title" aria-describedby="cp-erase-desc">
+        <h2 id="cp-erase-title" tabindex="-1">Delete all ContextPassport data?</h2>
         <p id="cp-erase-desc" class="cp-muted" style="margin:6px 0 12px">
           This permanently erases everything stored by this extension on this device. It cannot be undone.
         </p>
@@ -51,9 +51,10 @@
 
     <!-- Pre-capture preview modal -->
     <div id="cp-preview-modal" class="cp-modal-backdrop" hidden>
-      <div class="cp-modal" role="dialog" aria-labelledby="cp-prev-title">
-        <h2 id="cp-prev-title">Ready to capture</h2>
-        <p class="cp-muted" style="margin:6px 0 12px">Review what will be saved before it lands in your project.</p>
+      <div class="cp-modal" role="dialog" aria-modal="true" aria-labelledby="cp-prev-title" aria-describedby="cp-prev-desc">
+        <h2 id="cp-prev-title" tabindex="-1">Ready to capture</h2>
+        <p id="cp-prev-desc" class="cp-muted" style="margin:6px 0 12px">Review what will be saved before it lands in your project.</p>
+        <div id="cp-prev-integrity" class="cp-integrity" role="status" aria-live="polite" hidden></div>
         <ul class="cp-erase-list" id="cp-prev-stats"></ul>
         <div id="cp-prev-samples" class="cp-prev-samples"></div>
         <label class="cp-toggle" style="margin-top:10px">
@@ -99,17 +100,31 @@
       <ul id="cp-health-recs" class="cp-recs"></ul>
     </section>
 
-    <section class="cp-section" id="cp-captures-section" hidden>
-      <label class="cp-label" for="cp-capture-select">Captures in this project</label>
-      <select id="cp-capture-select" class="cp-select"></select>
+    <section class="cp-section" id="cp-captures-section" hidden aria-labelledby="cp-captures-heading">
+      <div class="cp-row" style="justify-content:space-between">
+        <label id="cp-captures-heading" class="cp-label" for="cp-capture-select" style="margin:0">Captures in this project</label>
+        <div class="cp-row" style="gap:4px">
+          <button id="cp-export-json" class="cp-btn cp-btn-sm" aria-label="Export captures as JSON">Export JSON</button>
+          <button id="cp-export-csv" class="cp-btn cp-btn-sm" aria-label="Export captures as CSV">CSV</button>
+          <button id="cp-import" class="cp-btn cp-btn-sm" aria-label="Import captures from file">Import…</button>
+          <input id="cp-import-file" type="file" accept=".json,.csv,application/json,text/csv" hidden />
+        </div>
+      </div>
+      <p id="cp-project-stats" class="cp-muted" aria-live="polite"></p>
+      <div id="cp-undo-pill" class="cp-undo-pill" hidden role="status" aria-live="polite">
+        <span id="cp-undo-text">Last capture saved.</span>
+        <button id="cp-undo-btn" class="cp-btn cp-btn-sm">Undo</button>
+      </div>
+      <select id="cp-capture-select" class="cp-select" aria-label="Select capture"></select>
       <p id="cp-capture-meta" class="cp-muted"></p>
+      <ul id="cp-capture-stats" class="cp-capture-stats" aria-label="Capture statistics"></ul>
       <div class="cp-row" style="gap:6px;flex-wrap:wrap">
         <button id="cp-capture-activate" class="cp-btn" style="flex:1 1 100%">Lock as active capture</button>
         <button id="cp-capture-paste" class="cp-btn cp-btn-primary" style="flex:1 1 100%">Paste this capture's handoff</button>
         <button id="cp-capture-rename" class="cp-btn" style="flex:1 1 45%">Rename</button>
         <button id="cp-capture-delete" class="cp-btn cp-btn-danger-ghost" style="flex:1 1 45%">Delete</button>
       </div>
-      <p id="cp-capture-switch-status" class="cp-muted"></p>
+      <p id="cp-capture-switch-status" class="cp-muted" role="status" aria-live="polite"></p>
     </section>
 
     <section class="cp-section">

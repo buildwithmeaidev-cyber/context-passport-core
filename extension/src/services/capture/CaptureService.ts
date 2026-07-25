@@ -5,10 +5,12 @@ import type { CapturedConversation, ConversationTurn } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import { hashTurn } from "@/core/hashTurn";
 import type { CaptureMode, CaptureOptions, PreviewResult } from "@/shared/messaging";
+import { CaptureIntegrityService } from "./CaptureIntegrityService";
 
 const DEFAULT_OPTIONS: CaptureOptions = { mode: "since-last", lastN: 20 };
 
 export class CaptureService {
+  private readonly integrity = new CaptureIntegrityService();
   constructor(
     private readonly registry: ProviderRegistry,
     private readonly projects: ProjectService,
@@ -42,6 +44,7 @@ export class CaptureService {
     const seen = await this.collectSeenHashes(projectId);
     const scoped = applyCaptureMode(c.value.turns, options, seen);
     const kept = scoped.filtered;
+    const integrity = this.integrity.validate(c.value.turns, c.value.title);
     return ok({
       providerId: c.value.providerId,
       extractedTurns: c.value.turns.length,
@@ -50,6 +53,7 @@ export class CaptureService {
       willCapture: kept.length,
       sampleFirst: kept[0] ? { role: kept[0].role, text: truncate(kept[0].text, 240) } : null,
       sampleLast: kept.length > 1 ? { role: kept[kept.length - 1]!.role, text: truncate(kept[kept.length - 1]!.text, 240) } : null,
+      integrity: { level: integrity.level, issues: integrity.issues },
     });
   }
 
