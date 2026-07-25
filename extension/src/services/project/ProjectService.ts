@@ -49,6 +49,7 @@ export class ProjectService {
         updatedAt: 0,
       },
       memory: [],
+      lastCaptureUndo: null,
     };
     const next = [project, ...(await this.list())];
     const w = await this.storage.write("projects", next);
@@ -128,16 +129,69 @@ export class ProjectService {
       ? this.intelligence.enrich(project.intelligence, capture.turns, Date.now())
       : project.intelligence;
 
+    // Capture the previously-active lock (if any) so undo can restore it.
+    const previousActiveCaptureId = await this.readActiveCaptureId(project.id);
+
     const next: Project = {
       ...project,
       passport: merged as Project["passport"],
       captures,
       intelligence,
       updatedAt: Date.now(),
+      lastCaptureUndo: {
+        captureId: capture.id,
+        previousActiveCaptureId,
+        capturedAt: capture.capturedAt,
+      },
     };
     const w = await this.replace(next);
     if (!w.ok) return err(w.error);
     return ok(next);
+  }
+
+  /** Undo the most recent capture: remove it, restore the previous active lock. */
+  async undoLastCapture(projectId: string): Promise<Result<{ removedCaptureId: string }>> {
+    const project = await this.get(projectId);
+    if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
+    const undo = project.lastCaptureUndo;
+    if (!undo) return err(appError("VALIDATION", "Nothing to undo."));
+
+    // Rebuild passport by removing non-pinned facets from the undone capture.
+    const passport = { ...project.passport } as Project["passport"];
+    for (const field of Object.values(FACET_TO_FIELD)) {
+      passport[field] = passport[field].filter(
+        (f) => f.source.captureId !== undo.captureId || f.pinned,
+      );
+    }
+    const captures = project.captures.filter((c) => c.id !== undo.captureId);
+
+    const next: Project = {
+      ...project,
+      passport,
+      captures,
+      updatedAt: Date.now(),
+      lastCaptureUndo: null,
+    };
+    const w = await this.replace(next);
+    if (!w.ok) return err(w.error);
+
+    // Restore the prior active-capture lock.
+    await this.writeActiveCaptureId(projectId, undo.previousActiveCaptureId);
+    return ok({ removedCaptureId: undo.captureId });
+  }
+
+  private async readActiveCaptureId(projectId: string): Promise<string | null> {
+    const r = await this.storage.read("settings:user");
+    if (!r.ok || !r.value) return null;
+    return r.value.activeCaptureByProject[projectId] ?? null;
+  }
+
+  private async writeActiveCaptureId(projectId: string, captureId: string | null): Promise<void> {
+    const r = await this.storage.read("settings:user");
+    if (!r.ok || !r.value) return;
+    const map = { ...r.value.activeCaptureByProject };
+    if (captureId) map[projectId] = captureId; else delete map[projectId];
+    await this.storage.write("settings:user", { ...r.value, activeCaptureByProject: map });
   }
 
   async renameCapture(projectId: string, captureId: string, title: string): Promise<Result<true>> {

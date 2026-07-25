@@ -63,10 +63,25 @@ const v3ToV4 = (_key: string, v: Versioned<unknown>): Versioned<unknown> => {
   return { __v: 4, data: v.data };
 };
 
+// v4 -> v5: projects gain `lastCaptureUndo`. Additive; zod default fills missing field.
+const v4ToV5 = (key: string, v: Versioned<unknown>): Versioned<unknown> => {
+  if (key === "projects" && Array.isArray(v.data)) {
+    return {
+      __v: 5,
+      data: (v.data as Array<Record<string, unknown>>).map((p) => ({
+        ...p,
+        lastCaptureUndo: p.lastCaptureUndo ?? null,
+      })),
+    };
+  }
+  return { __v: 5, data: v.data };
+};
+
 export const migrations: Record<number, (key: string, value: Versioned<unknown>) => Versioned<unknown>> = {
   1: v1ToV2,
   2: v2ToV3,
   3: v3ToV4,
+  4: v4ToV5,
 };
 
 /** One-shot import called by background onInstalled when bumping from v1. */

@@ -3,6 +3,9 @@ import { Tokens } from "@/core/tokens";
 import { sendToActiveTab, type DetectResult, type PreviewResult, type CaptureOptions, type CaptureMode } from "@/shared/messaging";
 import { renderInjector } from "@/features/injector/injectorView";
 import { renderProjectPicker } from "@/features/projects/projectPickerView";
+import { CaptureStatsService } from "@/services/capture/CaptureStatsService";
+import { CapturePortabilityService } from "@/services/portability/CapturePortabilityService";
+import { trapFocus } from "@/ui/focusTrap";
 
 (async () => {
   const container = await buildContainer("popup");
@@ -84,6 +87,8 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   const captureMode = await wireCaptureModePicker(storage);
 
   // Capture switcher with active-capture lock.
+  const stats = new CaptureStatsService();
+  const portability = new CapturePortabilityService(projects);
   const captureSwitcher = wireCaptureSwitcher({
     section: document.getElementById("cp-captures-section") as HTMLElement,
     select: document.getElementById("cp-capture-select") as HTMLSelectElement,
@@ -93,9 +98,15 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
     renameBtn: document.getElementById("cp-capture-rename") as HTMLButtonElement,
     deleteBtn: document.getElementById("cp-capture-delete") as HTMLButtonElement,
     status: document.getElementById("cp-capture-switch-status") as HTMLParagraphElement,
+    projectStats: document.getElementById("cp-project-stats") as HTMLParagraphElement,
+    captureStats: document.getElementById("cp-capture-stats") as HTMLUListElement,
+    undoPill: document.getElementById("cp-undo-pill") as HTMLDivElement,
+    undoText: document.getElementById("cp-undo-text") as HTMLSpanElement,
+    undoBtn: document.getElementById("cp-undo-btn") as HTMLButtonElement,
     projects,
     continuity,
     storage,
+    stats,
     getProjectId: () => projectPicker.activeProjectId(),
     getTargetProvider: () => activeProviderId,
     getMode: () => (document.getElementById("cp-mode") as HTMLSelectElement | null)?.value || "balanced",
@@ -108,6 +119,17 @@ import { renderProjectPicker } from "@/features/projects/projectPickerView";
   await captureSwitcher.refresh();
   (document.getElementById("cp-project") as HTMLSelectElement)
     .addEventListener("change", () => captureSwitcher.refresh());
+
+  wireExportImport({
+    exportJsonBtn: document.getElementById("cp-export-json") as HTMLButtonElement,
+    exportCsvBtn: document.getElementById("cp-export-csv") as HTMLButtonElement,
+    importBtn: document.getElementById("cp-import") as HTMLButtonElement,
+    importFile: document.getElementById("cp-import-file") as HTMLInputElement,
+    status: document.getElementById("cp-capture-switch-status") as HTMLParagraphElement,
+    portability,
+    getProjectId: () => projectPicker.activeProjectId(),
+    afterImport: async () => { await captureSwitcher.refresh(); await projectPicker.refresh(); },
+  });
 
   // Advanced "Capture only" button — also routed through preview.
   const captureBtn = document.getElementById("cp-capture") as HTMLButtonElement;
@@ -315,11 +337,27 @@ async function showPreviewModal(
   storage: import("@/storage/StorageGateway").StorageGateway,
 ): Promise<boolean> {
   const modal = document.getElementById("cp-preview-modal") as HTMLDivElement;
+  const dialog = modal.querySelector<HTMLElement>(".cp-modal")!;
   const stats = document.getElementById("cp-prev-stats") as HTMLUListElement;
   const samples = document.getElementById("cp-prev-samples") as HTMLDivElement;
+  const integrity = document.getElementById("cp-prev-integrity") as HTMLDivElement;
   const skip = document.getElementById("cp-prev-skip") as HTMLInputElement;
   const cancel = document.getElementById("cp-prev-cancel") as HTMLButtonElement;
   const confirmBtn = document.getElementById("cp-prev-confirm") as HTMLButtonElement;
+
+  // Integrity banner
+  if (p.integrity && p.integrity.level !== "ok" && p.integrity.issues.length > 0) {
+    integrity.hidden = false;
+    integrity.dataset.level = p.integrity.level;
+    const title = p.integrity.level === "error" ? "Capture may be incomplete" : "Heads up before you capture";
+    const items = p.integrity.issues.map((i) =>
+      `<li>${escapeHtml(i.message)}${i.count && i.count > 1 ? ` <span class="cp-muted">(×${i.count})</span>` : ""}</li>`,
+    ).join("");
+    integrity.innerHTML = `<strong>${escapeHtml(title)}</strong><ul>${items}</ul>`;
+  } else {
+    integrity.hidden = true;
+    integrity.innerHTML = "";
+  }
 
   stats.innerHTML = [
     ["Provider detected", p.providerId],
@@ -338,19 +376,28 @@ async function showPreviewModal(
     ? `${sampleHtml(p.sampleFirst)}${p.sampleLast && p.willCapture > 1 ? sampleHtml(p.sampleLast) : ""}`
     : `<div class="cp-prev-sample" style="color:var(--cp-muted)">Nothing new to capture with this mode. Switch to Full or Last N to force a re-capture.</div>`;
 
+  const hasError = p.integrity?.level === "error";
+  const needsExtraConfirm = { current: hasError && p.willCapture > 0 };
   confirmBtn.disabled = p.willCapture === 0;
-  confirmBtn.textContent = p.willCapture === 0 ? "Nothing to capture" : `Capture ${p.willCapture} turn${p.willCapture === 1 ? "" : "s"}`;
+  confirmBtn.textContent = p.willCapture === 0
+    ? "Nothing to capture"
+    : needsExtraConfirm.current
+      ? "Capture anyway"
+      : `Capture ${p.willCapture} turn${p.willCapture === 1 ? "" : "s"}`;
   skip.checked = false;
   modal.hidden = false;
+  const trap = trapFocus(dialog, () => onCancel());
 
+  let onCancel!: () => void;
   return await new Promise<boolean>((resolve) => {
     const cleanup = () => {
+      trap.release();
       modal.hidden = true;
       cancel.removeEventListener("click", onCancel);
       confirmBtn.removeEventListener("click", onConfirm);
       modal.removeEventListener("click", onBackdrop);
     };
-    const onCancel = () => { cleanup(); resolve(false); };
+    onCancel = () => { cleanup(); resolve(false); };
     const onConfirm = async () => {
       if (skip.checked) await writeSettings(storage, { skipCapturePreview: true });
       cleanup(); resolve(true);
@@ -443,13 +490,22 @@ function wireEraseFlow(
     }).join("") + `<li class="cp-erase-row cp-erase-total"><span>Storage keys to remove</span><strong>${p.totalKeys}</strong></li>`;
   };
 
-  const close_ = (): void => { modal.hidden = true; };
+  let trap: { release: () => void } | null = null;
+  const dialog = modal.querySelector<HTMLElement>(".cp-modal")!;
+  const openModal = () => {
+    modal.hidden = false;
+    renderPreview();
+    trap?.release();
+    trap = trapFocus(dialog, () => close_());
+  };
+  const close_ = (): void => { trap?.release(); trap = null; modal.hidden = true; };
 
-  openBtn.addEventListener("click", () => { modal.hidden = false; renderPreview(); });
-  modal.addEventListener("cp:open", () => { renderPreview(); });
+  openBtn.addEventListener("click", openModal);
+  modal.addEventListener("cp:open", openModal);
   cancel.addEventListener("click", close_);
   close.addEventListener("click", close_);
   modal.addEventListener("click", (e) => { if (e.target === modal) close_(); });
+
 
   confirmBtn.addEventListener("click", async () => {
     confirmBtn.disabled = true;
@@ -490,9 +546,15 @@ interface CaptureSwitcherDeps {
   renameBtn: HTMLButtonElement;
   deleteBtn: HTMLButtonElement;
   status: HTMLParagraphElement;
+  projectStats: HTMLParagraphElement;
+  captureStats: HTMLUListElement;
+  undoPill: HTMLDivElement;
+  undoText: HTMLSpanElement;
+  undoBtn: HTMLButtonElement;
   projects: import("@/services/project/ProjectService").ProjectService;
   continuity: import("@/services/continuity/ContinuityService").ContinuityService;
   storage: import("@/storage/StorageGateway").StorageGateway;
+  stats: CaptureStatsService;
   getProjectId: () => string | null;
   getTargetProvider: () => string | null;
   getMode: () => string;
@@ -528,7 +590,46 @@ function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promis
 
     deps.activateBtn.disabled = cur.id === activeId;
     deps.activateBtn.textContent = cur.id === activeId ? "This capture is the active lock" : "Lock as active capture";
+
+    // Project-level stats
+    const ps = deps.stats.projectStats(project);
+    const lastWhen = ps.lastCaptureAt ? new Date(ps.lastCaptureAt).toLocaleString() : "—";
+    deps.projectStats.textContent = `${ps.totalCaptures} captures · ${ps.totalTurns} turns · ${Math.round(ps.aggregateDuplicateRate * 100)}% in-capture duplicates · last capture ${lastWhen}`;
+
+    // Per-capture stats
+    const cs = deps.stats.captureStats(cur);
+    deps.captureStats.innerHTML = [
+      ["Total turns", cs.totalTurns],
+      ["Unique turns", cs.uniqueTurns],
+      ["Duplicate rate", `${Math.round(cs.duplicateRate * 100)}%`],
+      ["User / assistant", `${cs.userTurns} / ${cs.assistantTurns}`],
+    ].map(([label, value]) =>
+      `<li><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong></li>`,
+    ).join("");
+
+    // Undo pill
+    if (project.lastCaptureUndo) {
+      const undoCap = project.captures.find((c) => c.id === project.lastCaptureUndo!.captureId);
+      const label = undoCap ? undoCap.title : "last capture";
+      deps.undoPill.hidden = false;
+      deps.undoText.textContent = `Just captured: ${label}. Undo?`;
+    } else {
+      deps.undoPill.hidden = true;
+    }
   }
+
+  deps.undoBtn.addEventListener("click", async () => {
+    const projectId = deps.getProjectId();
+    if (!projectId) return;
+    deps.undoBtn.disabled = true;
+    const r = await deps.projects.undoLastCapture(projectId);
+    deps.undoBtn.disabled = false;
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    browsingCaptureId = null;
+    await refresh();
+    await deps.afterMutate();
+    setStatus(deps.status, "✓ Last capture undone. Prior active lock restored.", "success");
+  });
 
   deps.select.addEventListener("change", () => { browsingCaptureId = deps.select.value; refresh(); });
 
@@ -597,4 +698,56 @@ function wireCaptureSwitcher(deps: CaptureSwitcherDeps): { refresh: () => Promis
   });
 
   return { refresh };
+}
+
+// ===== Export / Import =====
+
+interface ExportImportDeps {
+  exportJsonBtn: HTMLButtonElement;
+  exportCsvBtn: HTMLButtonElement;
+  importBtn: HTMLButtonElement;
+  importFile: HTMLInputElement;
+  status: HTMLParagraphElement;
+  portability: CapturePortabilityService;
+  getProjectId: () => string | null;
+  afterImport: () => Promise<void>;
+}
+
+function wireExportImport(deps: ExportImportDeps): void {
+  const runExport = async (format: "json" | "csv") => {
+    const projectId = deps.getProjectId();
+    if (!projectId) { setStatus(deps.status, "Pick a project first.", "error"); return; }
+    const r = await deps.portability.exportProject(projectId, format);
+    if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+    const blob = new Blob([r.value.body], { type: r.value.mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = r.value.filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(deps.status, `✓ Exported ${format.toUpperCase()}: ${r.value.filename}`, "success");
+  };
+  deps.exportJsonBtn.addEventListener("click", () => runExport("json"));
+  deps.exportCsvBtn.addEventListener("click", () => runExport("csv"));
+
+  deps.importBtn.addEventListener("click", () => deps.importFile.click());
+  deps.importFile.addEventListener("change", async () => {
+    const file = deps.importFile.files?.[0];
+    if (!file) return;
+    const projectId = deps.getProjectId();
+    if (!projectId) { setStatus(deps.status, "Pick a project first.", "error"); return; }
+    setStatus(deps.status, `Importing ${file.name}…`);
+    try {
+      const body = await file.text();
+      const r = await deps.portability.importIntoProject(projectId, body, file.name);
+      if (!r.ok) { setStatus(deps.status, r.error.message, "error"); return; }
+      await deps.afterImport();
+      setStatus(deps.status, `✓ Imported ${r.value.imported} of ${r.value.totalInPayload} captures (${r.value.skipped} duplicates skipped).`, "success");
+    } catch (e) {
+      setStatus(deps.status, e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      deps.importFile.value = "";
+    }
+  });
 }

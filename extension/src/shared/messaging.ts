@@ -24,6 +24,16 @@ export interface CaptureResult {
 export interface DetectResult {
   providerId: string | null;
 }
+export interface PreviewIntegrityIssue {
+  code: string;
+  severity: "warn" | "error";
+  message: string;
+  count?: number;
+}
+export interface PreviewIntegrity {
+  level: "ok" | "warn" | "error";
+  issues: PreviewIntegrityIssue[];
+}
 export interface PreviewResult {
   providerId: string;
   extractedTurns: number;
@@ -32,6 +42,7 @@ export interface PreviewResult {
   willCapture: number;
   sampleFirst: { role: string; text: string } | null;
   sampleLast: { role: string; text: string } | null;
+  integrity: PreviewIntegrity;
 }
 
 export async function sendToActiveTab<T = unknown>(message: RuntimeMessage): Promise<T> {

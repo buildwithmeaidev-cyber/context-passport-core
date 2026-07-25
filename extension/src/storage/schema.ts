@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CURRENT_VERSION = 4 as const;
+export const CURRENT_VERSION = 5 as const;
 
 export interface Versioned<T> {
   __v: number;
@@ -135,6 +135,12 @@ const projectSchema = z.object({
     text: z.string(),
     createdAt: z.number(),
   })).default([]),
+  /** Undo record for the most recent capture. Overwritten on each ingest; cleared after undo. */
+  lastCaptureUndo: z.object({
+    captureId: z.string(),
+    previousActiveCaptureId: z.string().nullable(),
+    capturedAt: z.number(),
+  }).nullable().default(null),
 });
 
 export const schemas = {
