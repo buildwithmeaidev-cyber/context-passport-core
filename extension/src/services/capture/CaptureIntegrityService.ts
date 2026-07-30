@@ -2,6 +2,8 @@
 // Never persists — used to warn the user, never to block a capture silently.
 import type { ConversationTurn } from "@/core/tokens";
 import { hashTurn } from "@/core/hashTurn";
+import { type AdapterDiagnostics, explainDiagnostics } from "./AdapterDiagnostics";
+
 
 export type IntegritySeverity = "warn" | "error";
 export type IntegrityLevel = "ok" | IntegritySeverity;
