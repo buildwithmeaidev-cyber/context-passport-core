@@ -7,8 +7,11 @@ import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
 import { hashTurn } from "@/core/hashTurn";
+import { buildThreadKey, buildThreadTitle, deriveTopic } from "@/core/threadKey";
+import { ThreadSummarizer } from "@/services/continuity/ThreadSummarizer";
 
 const MAX_CAPTURES_PER_PROJECT = 50;
+
 
 /**
  * ProjectService — CRUD for projects + the merge logic that turns captures
