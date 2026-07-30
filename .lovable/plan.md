@@ -1,61 +1,67 @@
 ## Scope
 
-Five additions to the extension's capture pipeline and popup UI. All local, no backend, no schema-breaking changes beyond an additive v4 → v5 migration for undo history.
+Six changes to the extension. All local, no backend. One additive storage bump v5 → v6.
 
 ---
 
-## 1. Capture integrity check (pre-confirm)
+## 1. Workspace-wide export bundle
 
-Extend the existing preview flow (`PREVIEW_CAPTURE_ACTIVE_TAB`) with a validation pass that runs on the extracted turns before the modal renders.
+`CapturePortabilityService` currently exports a single project only.
 
-- New `services/capture/CaptureIntegrityService.ts` returning `{ level: "ok" | "warn" | "error", issues: Issue[] }`.
-- Checks: empty turn text, missing role, role not in enum, suspiciously short turns (<3 chars), consecutive identical turns, in-capture duplicate rate, missing title, zero user turns, zero assistant turns, first turn is assistant (likely DOM cut-off), last turn suspiciously truncated (ends mid-sentence with no punctuation and near the max char cap → likely DOM truncation).
-- `PreviewResult` in `shared/messaging.ts` gains `integrity: { level, issues: [{ code, severity, message, count? }] }`.
-- Preview modal renders a warning banner (yellow for `warn`, red for `error`) above the sample block. Confirm button stays enabled for `warn`, requires an extra "Capture anyway" click for `error`.
+- Add `exportAll(format)`:
+  - **JSON**: `{ formatVersion: 2, exportedAt, projects: [{ id, name, description, captures[] }] }`. Format version 2 is a superset; the v1 single-project reader stays supported on import.
+  - **CSV**: one flat file with a leading `projectId,projectName` pair of columns added to the existing row shape.
+- Popup Captures panel: the existing `Export ▾` menu gains **"All projects (JSON)"** and **"All projects (CSV)"** below the current per-project entries.
 
-## 2. Undo last capture
+## 2. Import with per-project conflict handling
 
-- Storage v5 adds `lastCaptureUndo` per project: `{ captureId, previousActiveCaptureId, capturedAt } | null`. Migration is additive (default `null`).
-- `ProjectService.ingestCapture` records undo state after every successful ingest (overwrites prior undo — single-level undo only, matches the "last capture" requirement).
-- `ProjectService.undoLastCapture(projectId)` removes the capture, rebuilds the project's turn-hash registry from remaining captures, restores the prior `activeCaptureByProject` entry, clears `lastCaptureUndo`.
-- Popup shows an "Undo last capture" pill in the Captures panel when undo state exists, with the capture title and a relative timestamp. Also surfaced as a toast for ~10s right after a successful capture.
+- `importIntoProject` / new `importBundle` accept `strategy: "merge" | "dedupe" | "overwrite"`.
+  - **merge** — append every capture as-is, no cross-capture dedup (fastest, may duplicate).
+  - **dedupe** — current behaviour: hash every turn, drop turns already in the project.
+  - **overwrite** — delete the project's existing captures and passport facets sourced from them, then ingest the payload fresh.
+- New import modal (reuses preview-modal styling + focus trap): after the file is read, it lists each project in the payload with a detected match in the current workspace, the capture/turn counts, and a per-row strategy `<select>`. Unmatched projects get a "Create new project" row. Confirm runs the import and shows a per-project result summary.
+- Bundle imports route to matching projects by name (case-insensitive) with a manual override dropdown.
 
-## 3. Export / import captures
+## 3. Adapter-level capture warnings
 
-- New `services/portability/CapturePortabilityService.ts`.
-  - `exportProject(projectId, format)` → JSON (full fidelity: captures + `turnHashes` + passport optional flag) or CSV (flat: `captureId,capturedAt,providerId,title,turnIndex,role,text`).
-  - `importIntoProject(projectId, payload)` validates via a dedicated zod schema (independent of internal `Capture` schema so future format changes don't break imports), re-hashes turns, and runs the same cross-capture dedup path as normal ingest.
-- Popup Captures panel gets `Export ▾` (JSON / CSV) and `Import…` buttons. Import uses a hidden `<input type="file">`; JSON only for round-trip, CSV import supported for JSON as well as CSV. Result summary reuses the preview modal styling ("Imported X captures, skipped Y duplicates").
-- No new permissions — uses `Blob` + `URL.createObjectURL` for export and `FileReader` for import.
+Today `CaptureIntegrityService` reports *what* is wrong, not *why*.
 
-## 4. Accessibility for popup + modals
+- Adapters gain an optional `lastExtractionDiagnostics` on `DomAdapterBase`: which selector matched, which fell back, node counts per selector, and which fields (role, text, title) came up empty.
+- `SafeProviderAdapter` passes diagnostics through; a failing adapter still reports its trip reason.
+- `PreviewResult.integrity` gains `diagnostics: { providerId, adapterVersion, selectorsTried: [{ selector, matched, usedFor }], missingFields: string[] }`.
+- The integrity banner gets a **"Show details"** disclosure rendering that table in plain language, e.g. *"Claude adapter: message container selector `div[data-test-render-count]` matched 0 nodes — fell back to `.font-claude-message`; 3 turns have no role."*
 
-- Preview modal and delete-data modal: add `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, `aria-describedby`. Focus moves to the modal's heading on open, restored to the invoking button on close.
-- Focus trap utility in `ui/focusTrap.ts` (tab/shift-tab cycle across focusable descendants, Escape closes).
-- Capture switcher list becomes a `role="listbox"` with `role="option"` rows, arrow-key navigation, Enter to select, Space to toggle lock. Each row gets `aria-selected`, `aria-label` describing provider + title + timestamp + lock state.
-- Buttons that are icon-only get `aria-label`. Live region (`aria-live="polite"`) added to the status paragraph so screen readers hear "Captured", "Duplicate skipped", etc.
-- Existing keyboard shortcut hints in the UI stay; documented shortcuts: `↑/↓` in switcher, `Enter` confirm, `Esc` cancel/close, `L` toggle lock on focused capture.
+## 4. Retention policy
 
-## 5. Capture stats panel
+- Settings gain `retention: { enabled, keepLastN, maxAgeDays }` (defaults: enabled, keepLastN 25, maxAgeDays 90; the hard 50-capture cap stays as a ceiling).
+- New `services/retention/RetentionService.ts` — pure function computing which captures to prune, plus `pruneProject`/`pruneAll` that also strip passport facets sourced from pruned captures (pinned facets always survive) and rebuild turn-hash registries.
+- Runs on popup open and after every ingest. Options page gets the controls plus a "Prune now" button showing what would be removed before confirming.
 
-- New `services/capture/CaptureStatsService.ts` (pure functions over stored data — no new persistence).
-  - Per-capture: `totalTurns`, `uniqueTurns`, `duplicateRate` (dupes vs. current project registry at capture time, computed live from `turnHashes` intersections with other captures), `userTurns`, `assistantTurns`, `capturedAt`, `providerId`.
-  - Per-project: `lastSuccessfulCaptureAt`, total captures, aggregate duplicate rate, first/last capture timestamps.
-- Popup gains a collapsible "Stats" section per capture in the switcher (chevron toggle) and a compact project-level stats row at the top of the Captures panel.
-- No new storage. Recomputed on popup open; cheap given the 50-capture cap.
+## 5. Context separation + deeper auto-context (the "mixed context" fix)
+
+Root cause: every capture from a tab lands in whichever project is active, and the passport merges all of them into one flat facet pool, so ChatGPT/Claude/Gemini threads blend together and handoff text reads thin.
+
+- **Thread identity.** Each capture gains `threadKey` (provider id + normalized conversation URL path) and `threadTitle`. Captures from the same AI conversation append to the same thread; a new conversation URL always starts a new, distinctly named thread — never merged into an existing one.
+- **Auto-naming.** Thread names become `<Provider> · <topic derived from the first user turn> · <n>` and stay stable across recaptures instead of getting a new timestamped name each time. Manual rename still wins.
+- **Scoped passport.** Facets carry the `threadKey` already present in `source`. The Captures panel gains a scope switch: **All threads / This thread only**, and the handoff render respects it, so pasted context is one coherent project or one coherent conversation — not a blend.
+- **Deep auto-summary.** New `services/continuity/ThreadSummarizer.ts` builds, per thread, a structured brief on every ingest: topic, chronological decision timeline with timestamps, current status, code/file references, unresolved questions, and concrete next actions — with turn-level provenance. This is generated locally from the turns (no LLM) and injected at the top of every handoff render, so the pasted context is self-explanatory and usable by a receiving AI rather than a bag of quotes.
+- Storage v6 migration is additive: backfill `threadKey`/`threadTitle` on existing captures from their URL + provider, default summaries to `null` and regenerate lazily.
+
+## 6. Interactive popup
+
+Same Linear/Raycast dark system, more life:
+
+- Command palette (`Cmd/Ctrl+K`) for: capture, paste handoff, switch project, switch thread, export, undo.
+- Animated capture flow — progress ring during extraction, count-up on turn totals, success checkmark, all ≤200ms.
+- Thread rail: collapsible list grouped by provider with provider glyphs, live turn/duplicate badges, hover previews.
+- Inline sparkline of captures over time in the stats row; toast stack replacing the single status line; skeletons on load.
 
 ---
 
 ## Technical notes
 
-- Storage bump v4 → v5 is additive; `migrations[4]` sets `lastCaptureUndo = null` on each project. No data loss risk.
-- No new host permissions, no network. All features run locally.
-- Tests to add:
-  - `tests/integrity.test.ts` — each integrity rule fires on the right fixture.
-  - `tests/undo.test.ts` — ingest → undo restores captures, hashes, active lock.
-  - `tests/portability.test.ts` — round-trip JSON export/import is lossless; CSV escapes commas/newlines/quotes; malformed payloads rejected via zod.
-  - `tests/stats.test.ts` — duplicate rate and aggregate math on fixture projects.
-  - Existing 37 tests must still pass.
-- Files touched (new): `services/capture/CaptureIntegrityService.ts`, `services/capture/CaptureStatsService.ts`, `services/portability/CapturePortabilityService.ts`, `ui/focusTrap.ts`, four new test files.
-- Files touched (edit): `storage/schema.ts`, `storage/migrations/index.ts`, `shared/messaging.ts`, `services/capture/CaptureService.ts`, `services/project/ProjectService.ts`, `popup/index.html`, `popup/main.ts`, `ui/tokens.css`, `docs/STORAGE_SCHEMA.md`, `docs/ARCHITECTURE.md`.
-- Rebuild + repackage the extension zip at the end; no landing-page changes.
+- Storage v5 → v6 is additive; no data loss. Migration backfills thread fields and retention defaults.
+- New files: `services/retention/RetentionService.ts`, `services/continuity/ThreadSummarizer.ts`, `services/capture/AdapterDiagnostics.ts`, `ui/commandPalette.ts`, `ui/importDialog.ts`.
+- Edited: `storage/schema.ts`, `storage/migrations/index.ts`, `shared/messaging.ts`, `providers/_base/DomAdapterBase.ts` + four adapters, `providers/SafeProviderAdapter.ts`, `services/capture/CaptureService.ts`, `services/capture/CaptureIntegrityService.ts`, `services/portability/CapturePortabilityService.ts`, `services/project/ProjectService.ts`, `services/continuity/strategies/*`, `popup/index.html`, `popup/main.ts`, `options/main.ts`, `ui/tokens.css`, docs.
+- Tests to add: `retention.test.ts`, `threads.test.ts` (separation + naming stability + summary shape), `portability-bundle.test.ts` (all-projects round-trip, three conflict strategies), `diagnostics.test.ts`. Existing 43 tests must stay green.
+- Rebuild and repackage `contextpassport.zip` at the end. No landing-page changes.
