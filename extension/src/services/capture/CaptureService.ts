@@ -155,23 +155,16 @@ export function applyCaptureMode(turns: readonly ConversationTurn[], options: Ca
   return { filtered: fresh, freshCount: fresh.length };
 }
 
-function buildCaptureTitle(
-  providerLabel: string,
-  turns: readonly { role: string; text: string }[],
-  fallback: string,
-  at: number,
-): string {
-  const firstUser = turns.find((t) => t.role === "user")?.text?.trim();
-  const firstAny = turns[0]?.text?.trim();
-  const snippet = summarize(firstUser || firstAny || fallback || "conversation", 60);
+function buildCaptureTitle(providerLabel: string, topic: string, at: number): string {
   const when = new Date(at).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
-  return `${providerLabel} · ${when} · ${snippet}`;
+  return `${providerLabel} · ${when} · ${summarize(topic, 60)}`;
 }
+
 
 function summarize(text: string, max: number): string {
   const one = text.replace(/\s+/g, " ").trim();
