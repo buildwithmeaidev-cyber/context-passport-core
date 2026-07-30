@@ -2,6 +2,8 @@ import type { ProviderAdapter } from "./ProviderAdapter";
 import type { ConversationTurn } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import type { Logger } from "@/core/logger";
+import { type AdapterDiagnostics, emptyDiagnostics } from "@/services/capture/AdapterDiagnostics";
+
 
 /**
  * SafeProviderAdapter — provider isolation boundary.
