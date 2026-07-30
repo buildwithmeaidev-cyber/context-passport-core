@@ -404,3 +404,16 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\w\s]/g, "").trim();
 }
 
+
+/**
+ * Disambiguate two threads that produced the same topic string inside one
+ * project, so every conversation still gets a distinct visible name.
+ */
+function threadOrdinal(project: Project, threadKey: string, topic: string): number {
+  const keys = new Set<string>();
+  for (const c of project.captures) {
+    if (!c.threadKey || c.threadKey === threadKey) continue;
+    if ((c.threadTitle || "").includes(topic)) keys.add(c.threadKey);
+  }
+  return keys.size + 1;
+}
