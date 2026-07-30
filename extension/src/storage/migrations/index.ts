@@ -77,12 +77,67 @@ const v4ToV5 = (key: string, v: Versioned<unknown>): Versioned<unknown> => {
   return { __v: 5, data: v.data };
 };
 
+// v5 -> v6: captures gain thread identity (threadKey/threadTitle) + an
+// auto-generated brief; settings gain a retention policy and paste scope.
+// Additive. Thread fields are backfilled from the stored URL + provider so
+// existing captures separate correctly instead of staying in one mixed pile.
+const v5ToV6 = (key: string, v: Versioned<unknown>): Versioned<unknown> => {
+  if (key === "projects" && Array.isArray(v.data)) {
+    return {
+      __v: 6,
+      data: (v.data as Array<Record<string, unknown>>).map((p) => ({
+        ...p,
+        captures: Array.isArray(p.captures)
+          ? (p.captures as Array<Record<string, unknown>>).map((c) => ({
+              ...c,
+              threadKey: c.threadKey ?? backfillThreadKey(String(c.providerId ?? "unknown"), String(c.url ?? "")),
+              threadTitle: c.threadTitle ?? String(c.title ?? "Imported conversation"),
+              brief: c.brief ?? "",
+              briefOneLiner: c.briefOneLiner ?? "",
+            }))
+          : [],
+      })),
+    };
+  }
+  if (key === "settings:user" && v.data && typeof v.data === "object") {
+    const old = v.data as Record<string, unknown>;
+    return {
+      __v: 6,
+      data: {
+        ...old,
+        pasteScope: old.pasteScope ?? "thread",
+        retention: old.retention ?? { enabled: true, keepLastN: 25, maxAgeDays: 90 },
+      },
+    };
+  }
+  return { __v: 6, data: v.data };
+};
+
+/**
+ * Local copy of the thread-key rule. Migrations must never import runtime
+ * modules whose behaviour can change — a migration has to keep producing the
+ * same output forever.
+ */
+function backfillThreadKey(providerId: string, url: string): string {
+  let normalized = url.split(/[?#]/)[0] ?? "";
+  try {
+    const u = new URL(url);
+    normalized = `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "").replace(/^\/u\/\d+/, "")}`;
+  } catch {
+    normalized = normalized.toLowerCase();
+  }
+  const m = normalized.match(/\/(?:c|chat|app|search|conversation)\/([a-z0-9-]{6,})/i);
+  return `${providerId}::${m?.[1]?.toLowerCase() ?? normalized}`;
+}
+
 export const migrations: Record<number, (key: string, value: Versioned<unknown>) => Versioned<unknown>> = {
   1: v1ToV2,
   2: v2ToV3,
   3: v3ToV4,
   4: v4ToV5,
+  5: v5ToV6,
 };
+
 
 /** One-shot import called by background onInstalled when bumping from v1. */
 export function importLegacyConversations(
