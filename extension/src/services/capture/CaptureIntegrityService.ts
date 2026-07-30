@@ -23,14 +23,21 @@ export interface IntegrityReport {
   duplicateTurns: number;
   userTurns: number;
   assistantTurns: number;
+  /** Adapter attribution for missing/odd fields. Undefined when unavailable. */
+  diagnostics?: AdapterDiagnostics & { explanation: string[] };
 }
 
 const MIN_TEXT_LEN = 3;
 const HIGH_DUP_RATE = 0.4;
 
 export class CaptureIntegrityService {
-  validate(turns: readonly ConversationTurn[], title: string): IntegrityReport {
+  validate(
+    turns: readonly ConversationTurn[],
+    title: string,
+    diagnostics?: AdapterDiagnostics | null,
+  ): IntegrityReport {
     const issues: IntegrityIssue[] = [];
+
     let empty = 0;
     let userTurns = 0;
     let assistantTurns = 0;
