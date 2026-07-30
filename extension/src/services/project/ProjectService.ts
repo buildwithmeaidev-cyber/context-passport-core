@@ -84,10 +84,20 @@ export class ProjectService {
     const project = await this.get(projectId);
     if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
 
-    // Cross-capture dedup using stable FNV-1a hashes stored on each capture.
-    // Survives DOM drift and repeated old turns across multiple captures.
+    // Thread identity: derived here so imported captures and captures made by
+    // older builds still get separated instead of landing in one mixed pile.
+    const threadKey = captured.threadKey || buildThreadKey(captured.providerId, captured.url);
+    const topic = deriveTopic(captured.turns, captured.title || "Conversation");
+    const threadTitle =
+      captured.threadTitle ||
+      project.captures.find((c) => c.threadKey === threadKey)?.threadTitle ||
+      buildThreadTitle(captured.providerId, topic, threadOrdinal(project, threadKey, topic));
+
+    // Dedup against this thread only. Cross-thread dedup would delete
+    // legitimately-repeated turns from a different conversation.
     const seen = new Set<string>();
     for (const cap of project.captures) {
+      if (cap.threadKey && cap.threadKey !== threadKey) continue;
       if (cap.turnHashes?.length) {
         for (const h of cap.turnHashes) seen.add(h);
       } else {
@@ -113,6 +123,24 @@ export class ProjectService {
       ? freshHashes
       : captured.turns.map((t) => hashTurn(t.role, t.text));
 
+    // Deep local brief. Built from every turn in this thread (prior captures
+    // plus the new ones) so the handoff explains the whole conversation, not
+    // just the delta that happened to be new this time.
+    const threadTurns = [
+      ...project.captures
+        .filter((c) => c.threadKey === threadKey)
+        .slice()
+        .sort((a, b) => a.capturedAt - b.capturedAt)
+        .flatMap((c) => c.turns),
+      ...turnsToStore,
+    ];
+    const brief = this.summarizer.summarize({
+      threadTitle,
+      providerId: captured.providerId,
+      capturedAt: captured.capturedAt,
+      turns: threadTurns,
+    });
+
     const capture: Capture = {
       id: crypto.randomUUID(),
       providerId: captured.providerId,
@@ -121,7 +149,12 @@ export class ProjectService {
       turns: turnsToStore,
       capturedAt: captured.capturedAt,
       turnHashes: hashesToStore,
+      threadKey,
+      threadTitle,
+      brief: brief.markdown,
+      briefOneLiner: brief.oneLiner,
     };
+
 
     const facets = extractFacets(capture.turns, {
       captureId: capture.id,
