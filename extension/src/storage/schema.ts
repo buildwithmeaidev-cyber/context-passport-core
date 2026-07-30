@@ -72,7 +72,20 @@ const captureSchema = z.object({
   capturedAt: z.number(),
   /** Stable hashes for each stored turn — enables cross-capture dedup that survives DOM drift. */
   turnHashes: z.array(z.string()).default([]),
+  /**
+   * Conversation thread this capture belongs to (provider + conversation id).
+   * Captures from different AI chats never share a key, which is what keeps
+   * their context from blending together.
+   */
+  threadKey: z.string().default(""),
+  /** Human, stable name for the thread — e.g. "Claude · Migrate billing to Stripe". */
+  threadTitle: z.string().default(""),
+  /** Deep auto-generated markdown brief for this capture's thread. */
+  brief: z.string().default(""),
+  /** One-line gist used in list rows. */
+  briefOneLiner: z.string().default(""),
 });
+
 
 const developerInsightsSchema = z.object({
   techStack: z.array(z.string()).default([]),
