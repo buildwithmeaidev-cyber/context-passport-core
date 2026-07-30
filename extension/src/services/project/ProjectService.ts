@@ -19,11 +19,14 @@ const MAX_CAPTURES_PER_PROJECT = 50;
  * to maintain domain-specific insights.
  */
 export class ProjectService {
+  private readonly summarizer = new ThreadSummarizer();
+
   constructor(
     private readonly storage: StorageGateway,
     private readonly intelligence?: IntelligenceService,
     private readonly flags?: { isEnabled(flag: string): boolean },
   ) {}
+
 
   async list(): Promise<Project[]> {
     const r = await this.storage.read("projects");
