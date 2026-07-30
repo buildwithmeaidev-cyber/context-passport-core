@@ -188,6 +188,51 @@ export class ProjectService {
     return ok(next);
   }
 
+  /** Distinct conversation threads in a project, newest activity first. */
+  async listThreads(projectId: string): Promise<Array<{ threadKey: string; threadTitle: string; providerId: string; captureCount: number; lastCapturedAt: number; oneLiner: string }>> {
+    const project = await this.get(projectId);
+    if (!project) return [];
+    const byKey = new Map<string, { threadKey: string; threadTitle: string; providerId: string; captureCount: number; lastCapturedAt: number; oneLiner: string }>();
+    for (const c of project.captures) {
+      const key = c.threadKey || `${c.providerId}::${c.id}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, {
+          threadKey: key,
+          threadTitle: c.threadTitle || c.title,
+          providerId: c.providerId,
+          captureCount: 1,
+          lastCapturedAt: c.capturedAt,
+          oneLiner: c.briefOneLiner || "",
+        });
+        continue;
+      }
+      existing.captureCount++;
+      if (c.capturedAt > existing.lastCapturedAt) {
+        existing.lastCapturedAt = c.capturedAt;
+        existing.oneLiner = c.briefOneLiner || existing.oneLiner;
+      }
+    }
+    return [...byKey.values()].sort((a, b) => b.lastCapturedAt - a.lastCapturedAt);
+  }
+
+  /**
+   * Passport containing only facets sourced from one thread. This is what a
+   * "thread" paste scope uses, so a handoff never blends two conversations.
+   */
+  async passportForThread(projectId: string, threadKey: string): Promise<ContextPassport> {
+    const project = await this.get(projectId);
+    if (!project) return EMPTY_PASSPORT;
+    const ids = new Set(project.captures.filter((c) => c.threadKey === threadKey).map((c) => c.id));
+    const out = {} as ContextPassport;
+    for (const field of Object.values(FACET_TO_FIELD)) {
+      out[field] = project.passport[field].filter((f) => ids.has(f.source.captureId) || f.source.captureId === "manual");
+    }
+    return out;
+  }
+
+
+
   /** Undo the most recent capture: remove it, restore the previous active lock. */
   async undoLastCapture(projectId: string): Promise<Result<{ removedCaptureId: string }>> {
     const project = await this.get(projectId);
