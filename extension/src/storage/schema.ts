@@ -171,7 +171,21 @@ export const schemas = {
     captureLastN: z.number().int().min(1).max(200).default(20),
     /** Skip the pre-capture preview modal and capture immediately. */
     skipCapturePreview: z.boolean().default(false),
+    /**
+     * How much of the passport a paste uses:
+     *   "thread"  — only the selected conversation thread (no mixing)
+     *   "project" — every thread in the project
+     */
+    pasteScope: z.enum(["thread", "project"]).default("thread"),
+    /** Automatic pruning of old captures. */
+    retention: z.object({
+      enabled: z.boolean().default(true),
+      keepLastN: z.number().int().min(1).max(500).default(25),
+      /** 0 disables the age rule. */
+      maxAgeDays: z.number().int().min(0).max(3650).default(90),
+    }).default({ enabled: true, keepLastN: 25, maxAgeDays: 90 }),
   }),
+
   "flags:overrides": z.record(z.string(), z.boolean()),
   "meta:schemaVersion": z.object({ version: z.number() }),
 } as const;
