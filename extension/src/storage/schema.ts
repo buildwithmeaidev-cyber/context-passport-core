@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CURRENT_VERSION = 5 as const;
+export const CURRENT_VERSION = 6 as const;
 
 export interface Versioned<T> {
   __v: number;
@@ -72,7 +72,20 @@ const captureSchema = z.object({
   capturedAt: z.number(),
   /** Stable hashes for each stored turn — enables cross-capture dedup that survives DOM drift. */
   turnHashes: z.array(z.string()).default([]),
+  /**
+   * Conversation thread this capture belongs to (provider + conversation id).
+   * Captures from different AI chats never share a key, which is what keeps
+   * their context from blending together.
+   */
+  threadKey: z.string().default(""),
+  /** Human, stable name for the thread — e.g. "Claude · Migrate billing to Stripe". */
+  threadTitle: z.string().default(""),
+  /** Deep auto-generated markdown brief for this capture's thread. */
+  brief: z.string().default(""),
+  /** One-line gist used in list rows. */
+  briefOneLiner: z.string().default(""),
 });
+
 
 const developerInsightsSchema = z.object({
   techStack: z.array(z.string()).default([]),
@@ -158,7 +171,21 @@ export const schemas = {
     captureLastN: z.number().int().min(1).max(200).default(20),
     /** Skip the pre-capture preview modal and capture immediately. */
     skipCapturePreview: z.boolean().default(false),
+    /**
+     * How much of the passport a paste uses:
+     *   "thread"  — only the selected conversation thread (no mixing)
+     *   "project" — every thread in the project
+     */
+    pasteScope: z.enum(["thread", "project"]).default("thread"),
+    /** Automatic pruning of old captures. */
+    retention: z.object({
+      enabled: z.boolean().default(true),
+      keepLastN: z.number().int().min(1).max(500).default(25),
+      /** 0 disables the age rule. */
+      maxAgeDays: z.number().int().min(0).max(3650).default(90),
+    }).default({ enabled: true, keepLastN: 25, maxAgeDays: 90 }),
   }),
+
   "flags:overrides": z.record(z.string(), z.boolean()),
   "meta:schemaVersion": z.object({ version: z.number() }),
 } as const;

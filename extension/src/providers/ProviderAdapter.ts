@@ -1,5 +1,7 @@
 import type { CapturedConversation, ConversationTurn } from "@/core/tokens";
 import type { Result } from "@/core/result";
+import type { AdapterDiagnostics } from "@/services/capture/AdapterDiagnostics";
+
 
 /**
  * ProviderAdapter — stable contract for AI-site adapters.
@@ -26,6 +28,15 @@ export interface ProviderAdapter {
 
   /** Place text into the page's composer/input. Does not submit. */
   injectPrompt(text: string): Result<true>;
+
+  /**
+   * Diagnostics from the most recent extractConversation() call: which
+   * selectors matched, which fell back, which fields were missing. Optional so
+   * third-party adapters stay valid without implementing it.
+   */
+  getDiagnostics?(): AdapterDiagnostics | null;
+
+
 
   readonly capabilities: {
     capture: boolean;

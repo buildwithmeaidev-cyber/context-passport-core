@@ -7,8 +7,11 @@ import type { CapturedConversation } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
 import type { IntelligenceService } from "@/services/intelligence/IntelligenceService";
 import { hashTurn } from "@/core/hashTurn";
+import { buildThreadKey, buildThreadTitle, deriveTopic } from "@/core/threadKey";
+import { ThreadSummarizer } from "@/services/continuity/ThreadSummarizer";
 
 const MAX_CAPTURES_PER_PROJECT = 50;
+
 
 /**
  * ProjectService — CRUD for projects + the merge logic that turns captures
@@ -16,11 +19,14 @@ const MAX_CAPTURES_PER_PROJECT = 50;
  * to maintain domain-specific insights.
  */
 export class ProjectService {
+  private readonly summarizer = new ThreadSummarizer();
+
   constructor(
     private readonly storage: StorageGateway,
     private readonly intelligence?: IntelligenceService,
     private readonly flags?: { isEnabled(flag: string): boolean },
   ) {}
+
 
   async list(): Promise<Project[]> {
     const r = await this.storage.read("projects");
@@ -78,10 +84,20 @@ export class ProjectService {
     const project = await this.get(projectId);
     if (!project) return err(appError("VALIDATION", `Project ${projectId} not found`));
 
-    // Cross-capture dedup using stable FNV-1a hashes stored on each capture.
-    // Survives DOM drift and repeated old turns across multiple captures.
+    // Thread identity: derived here so imported captures and captures made by
+    // older builds still get separated instead of landing in one mixed pile.
+    const threadKey = captured.threadKey || buildThreadKey(captured.providerId, captured.url);
+    const topic = deriveTopic(captured.turns, captured.title || "Conversation");
+    const threadTitle =
+      captured.threadTitle ||
+      project.captures.find((c) => c.threadKey === threadKey)?.threadTitle ||
+      buildThreadTitle(captured.providerId, topic, threadOrdinal(project, threadKey, topic));
+
+    // Dedup against this thread only. Cross-thread dedup would delete
+    // legitimately-repeated turns from a different conversation.
     const seen = new Set<string>();
     for (const cap of project.captures) {
+      if (cap.threadKey && cap.threadKey !== threadKey) continue;
       if (cap.turnHashes?.length) {
         for (const h of cap.turnHashes) seen.add(h);
       } else {
@@ -107,6 +123,24 @@ export class ProjectService {
       ? freshHashes
       : captured.turns.map((t) => hashTurn(t.role, t.text));
 
+    // Deep local brief. Built from every turn in this thread (prior captures
+    // plus the new ones) so the handoff explains the whole conversation, not
+    // just the delta that happened to be new this time.
+    const threadTurns = [
+      ...project.captures
+        .filter((c) => c.threadKey === threadKey)
+        .slice()
+        .sort((a, b) => a.capturedAt - b.capturedAt)
+        .flatMap((c) => c.turns),
+      ...turnsToStore,
+    ];
+    const brief = this.summarizer.summarize({
+      threadTitle,
+      providerId: captured.providerId,
+      capturedAt: captured.capturedAt,
+      turns: threadTurns,
+    });
+
     const capture: Capture = {
       id: crypto.randomUUID(),
       providerId: captured.providerId,
@@ -115,7 +149,12 @@ export class ProjectService {
       turns: turnsToStore,
       capturedAt: captured.capturedAt,
       turnHashes: hashesToStore,
+      threadKey,
+      threadTitle,
+      brief: brief.markdown,
+      briefOneLiner: brief.oneLiner,
     };
+
 
     const facets = extractFacets(capture.turns, {
       captureId: capture.id,
@@ -148,6 +187,51 @@ export class ProjectService {
     if (!w.ok) return err(w.error);
     return ok(next);
   }
+
+  /** Distinct conversation threads in a project, newest activity first. */
+  async listThreads(projectId: string): Promise<Array<{ threadKey: string; threadTitle: string; providerId: string; captureCount: number; lastCapturedAt: number; oneLiner: string }>> {
+    const project = await this.get(projectId);
+    if (!project) return [];
+    const byKey = new Map<string, { threadKey: string; threadTitle: string; providerId: string; captureCount: number; lastCapturedAt: number; oneLiner: string }>();
+    for (const c of project.captures) {
+      const key = c.threadKey || `${c.providerId}::${c.id}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, {
+          threadKey: key,
+          threadTitle: c.threadTitle || c.title,
+          providerId: c.providerId,
+          captureCount: 1,
+          lastCapturedAt: c.capturedAt,
+          oneLiner: c.briefOneLiner || "",
+        });
+        continue;
+      }
+      existing.captureCount++;
+      if (c.capturedAt > existing.lastCapturedAt) {
+        existing.lastCapturedAt = c.capturedAt;
+        existing.oneLiner = c.briefOneLiner || existing.oneLiner;
+      }
+    }
+    return [...byKey.values()].sort((a, b) => b.lastCapturedAt - a.lastCapturedAt);
+  }
+
+  /**
+   * Passport containing only facets sourced from one thread. This is what a
+   * "thread" paste scope uses, so a handoff never blends two conversations.
+   */
+  async passportForThread(projectId: string, threadKey: string): Promise<ContextPassport> {
+    const project = await this.get(projectId);
+    if (!project) return EMPTY_PASSPORT;
+    const ids = new Set(project.captures.filter((c) => c.threadKey === threadKey).map((c) => c.id));
+    const out = {} as ContextPassport;
+    for (const field of Object.values(FACET_TO_FIELD)) {
+      out[field] = project.passport[field].filter((f) => ids.has(f.source.captureId) || f.source.captureId === "manual");
+    }
+    return out;
+  }
+
+
 
   /** Undo the most recent capture: remove it, restore the previous active lock. */
   async undoLastCapture(projectId: string): Promise<Result<{ removedCaptureId: string }>> {
@@ -320,3 +404,16 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\w\s]/g, "").trim();
 }
 
+
+/**
+ * Disambiguate two threads that produced the same topic string inside one
+ * project, so every conversation still gets a distinct visible name.
+ */
+function threadOrdinal(project: Project, threadKey: string, topic: string): number {
+  const keys = new Set<string>();
+  for (const c of project.captures) {
+    if (!c.threadKey || c.threadKey === threadKey) continue;
+    if ((c.threadTitle || "").includes(topic)) keys.add(c.threadKey);
+  }
+  return keys.size + 1;
+}

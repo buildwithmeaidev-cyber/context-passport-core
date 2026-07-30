@@ -2,6 +2,8 @@
 // Never persists — used to warn the user, never to block a capture silently.
 import type { ConversationTurn } from "@/core/tokens";
 import { hashTurn } from "@/core/hashTurn";
+import { type AdapterDiagnostics, explainDiagnostics } from "./AdapterDiagnostics";
+
 
 export type IntegritySeverity = "warn" | "error";
 export type IntegrityLevel = "ok" | IntegritySeverity;
@@ -21,14 +23,21 @@ export interface IntegrityReport {
   duplicateTurns: number;
   userTurns: number;
   assistantTurns: number;
+  /** Adapter attribution for missing/odd fields. Undefined when unavailable. */
+  diagnostics?: AdapterDiagnostics & { explanation: string[] };
 }
 
 const MIN_TEXT_LEN = 3;
 const HIGH_DUP_RATE = 0.4;
 
 export class CaptureIntegrityService {
-  validate(turns: readonly ConversationTurn[], title: string): IntegrityReport {
+  validate(
+    turns: readonly ConversationTurn[],
+    title: string,
+    diagnostics?: AdapterDiagnostics | null,
+  ): IntegrityReport {
     const issues: IntegrityIssue[] = [];
+
     let empty = 0;
     let userTurns = 0;
     let assistantTurns = 0;
@@ -87,12 +96,42 @@ export class CaptureIntegrityService {
       issues.push({ code: "MISSING_TITLE", severity: "warn", message: "No conversation title detected." });
     }
 
+    // Attribute problems to the adapter that caused them.
+    if (diagnostics) {
+      const dead = diagnostics.selectorsTried.filter((p) => p.matched === 0 && !p.fallback);
+      if (dead.length > 0) {
+        issues.push({
+          code: "SELECTOR_DRIFT",
+          severity: total === 0 ? "error" : "warn",
+          message: `The ${diagnostics.adapterLabel} page reader could not find ${dead.map((d) => d.usedFor).join(", ")}. This provider's layout probably changed.`,
+          count: dead.length,
+        });
+      }
+      if (diagnostics.selectorsTried.some((p) => p.fallback && p.matched > 0)) {
+        issues.push({
+          code: "FALLBACK_EXTRACTION",
+          severity: "warn",
+          message: `Captured using a whole-page fallback instead of individual messages, so roles and turn boundaries may be wrong.`,
+        });
+      }
+    }
+
     const level: IntegrityLevel = issues.some((i) => i.severity === "error")
       ? "error"
       : issues.some((i) => i.severity === "warn")
         ? "warn"
         : "ok";
 
-    return { level, issues, totalTurns: total, emptyTurns: empty, duplicateTurns: duplicates, userTurns, assistantTurns };
+    return {
+      level,
+      issues,
+      totalTurns: total,
+      emptyTurns: empty,
+      duplicateTurns: duplicates,
+      userTurns,
+      assistantTurns,
+      diagnostics: diagnostics ? { ...diagnostics, explanation: explainDiagnostics(diagnostics) } : undefined,
+    };
+
   }
 }

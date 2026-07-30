@@ -40,4 +40,8 @@ export interface CapturedConversation {
   title: string;
   turns: ConversationTurn[];
   capturedAt: number;
+  /** Conversation thread identity. Optional on the wire; filled in on ingest. */
+  threadKey?: string;
+  threadTitle?: string;
 }
+

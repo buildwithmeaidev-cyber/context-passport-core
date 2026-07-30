@@ -30,9 +30,26 @@ export interface PreviewIntegrityIssue {
   message: string;
   count?: number;
 }
+export interface PreviewSelectorProbe {
+  selector: string;
+  usedFor: string;
+  matched: number;
+  fallback: boolean;
+}
+export interface PreviewDiagnostics {
+  providerId: string;
+  adapterLabel: string;
+  url: string;
+  selectorsTried: PreviewSelectorProbe[];
+  missingFields: string[];
+  /** Plain-language lines for the "Show details" disclosure. */
+  explanation: string[];
+}
 export interface PreviewIntegrity {
   level: "ok" | "warn" | "error";
   issues: PreviewIntegrityIssue[];
+  /** Why fields are missing: which adapter / selector was responsible. */
+  diagnostics?: PreviewDiagnostics;
 }
 export interface PreviewResult {
   providerId: string;
@@ -43,7 +60,13 @@ export interface PreviewResult {
   sampleFirst: { role: string; text: string } | null;
   sampleLast: { role: string; text: string } | null;
   integrity: PreviewIntegrity;
+  /** Thread this capture will land in — shown so the user knows nothing mixes. */
+  threadTitle?: string;
+  threadKey?: string;
+  /** True when this thread already exists in the project. */
+  threadExists?: boolean;
 }
+
 
 export async function sendToActiveTab<T = unknown>(message: RuntimeMessage): Promise<T> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
