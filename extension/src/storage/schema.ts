@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CURRENT_VERSION = 5 as const;
+export const CURRENT_VERSION = 6 as const;
 
 export interface Versioned<T> {
   __v: number;
