@@ -1,6 +1,7 @@
 import type { ProviderAdapter } from "../ProviderAdapter";
 import type { ConversationTurn } from "@/core/tokens";
 import { type Result, ok, err, appError } from "@/core/result";
+import { type AdapterDiagnostics, emptyDiagnostics } from "@/services/capture/AdapterDiagnostics";
 
 /**
  * Adapter contract test helper — shared between real adapters and fixtures.
@@ -13,6 +14,9 @@ export abstract class DomAdapterBase implements ProviderAdapter {
   abstract readonly hosts: readonly string[];
 
   readonly capabilities = { capture: true, inject: true } as const;
+
+  /** Populated on every extractConversation() call. Read-only for callers. */
+  protected diagnostics: AdapterDiagnostics | null = null;
 
   protected abstract turnSelectors: {
     container: string;
@@ -36,30 +40,87 @@ export abstract class DomAdapterBase implements ProviderAdapter {
     return !!document.querySelector(this.composerSelector);
   }
 
+  getDiagnostics(): AdapterDiagnostics | null {
+    return this.diagnostics;
+  }
+
   extractConversation(): Result<{ title: string; turns: ConversationTurn[] }> {
+    const diag = emptyDiagnostics(this.id, this.label, safeUrl());
+    this.diagnostics = diag;
     try {
       const nodes = Array.from(document.querySelectorAll(this.turnSelectors.container));
+      diag.selectorsTried.push({
+        selector: this.turnSelectors.container,
+        usedFor: "message container",
+        matched: nodes.length,
+        fallback: false,
+      });
+
       const turns: ConversationTurn[] = [];
       const seen = new Set<string>();
+      let userMatches = 0;
+      let assistantMatches = 0;
+      let textSelectorHits = 0;
+      let unknownRole = 0;
+      let emptyText = 0;
+
       for (const node of nodes) {
         const isUser = node.matches(this.turnSelectors.user) || !!node.querySelector(this.turnSelectors.user);
         const isAssistant = node.matches(this.turnSelectors.assistant) || !!node.querySelector(this.turnSelectors.assistant);
-        const textNode = node.querySelector(this.turnSelectors.text) ?? node;
+        if (isUser) userMatches++;
+        if (isAssistant) assistantMatches++;
+        if (!isUser && !isAssistant) unknownRole++;
+        const scoped = node.querySelector(this.turnSelectors.text);
+        if (scoped) textSelectorHits++;
+        const textNode = scoped ?? node;
         const text = cleanText(textNode.textContent ?? "");
-        if (!text) continue;
+        if (!text) { emptyText++; continue; }
         const fingerprint = `${isUser ? "user" : isAssistant ? "assistant" : "assistant"}:${text}`;
         if (seen.has(fingerprint)) continue;
         seen.add(fingerprint);
         const role: ConversationTurn["role"] = isUser ? "user" : isAssistant ? "assistant" : "assistant";
         turns.push({ role, text });
       }
+
+      diag.selectorsTried.push(
+        { selector: this.turnSelectors.user, usedFor: "user role marker", matched: userMatches, fallback: false },
+        { selector: this.turnSelectors.assistant, usedFor: "assistant role marker", matched: assistantMatches, fallback: false },
+        { selector: this.turnSelectors.text, usedFor: "message text", matched: textSelectorHits, fallback: false },
+      );
+
+      if (unknownRole > 0) {
+        diag.missingFields.push("role");
+        diag.notes.push(
+          `${unknownRole} message${unknownRole === 1 ? "" : "s"} matched neither the user nor the assistant marker and were stored as assistant turns.`,
+        );
+      }
+      if (emptyText > 0) {
+        diag.missingFields.push("text");
+        diag.notes.push(`${emptyText} message container${emptyText === 1 ? "" : "s"} had no readable text — the page may still be rendering.`);
+      }
+      if (nodes.length > 0 && textSelectorHits === 0) {
+        diag.notes.push(`No element matched the message-text selector; the whole message container was read instead, which can pull in buttons and labels.`);
+      }
+
       if (turns.length === 0) {
         const fallbackText = extractReadablePageText();
+        diag.selectorsTried.push({
+          selector: "main / article / body (readable text)",
+          usedFor: "whole-page fallback",
+          matched: fallbackText ? 1 : 0,
+          fallback: true,
+        });
+        diag.notes.push(
+          "No individual messages could be identified, so the page text was captured as a single block. Roles and turn boundaries are unavailable.",
+        );
         if (fallbackText) turns.push({ role: "assistant", text: fallbackText });
       }
+
       const title = document.title || this.label;
+      if (!document.title) diag.missingFields.push("title");
       return ok({ title, turns });
     } catch (e) {
+      diag.notes.push(`The ${this.label} page reader threw an error and could not finish.`);
       return err(appError("ADAPTER_FAILED", "extractConversation failed", e));
     }
   }
@@ -75,6 +136,15 @@ export abstract class DomAdapterBase implements ProviderAdapter {
     }
   }
 }
+
+function safeUrl(): string {
+  try {
+    return typeof location !== "undefined" ? location.href : "";
+  } catch {
+    return "";
+  }
+}
+
 
 function cleanText(text: string): string {
   return text
