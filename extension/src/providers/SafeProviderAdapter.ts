@@ -49,6 +49,32 @@ export class SafeProviderAdapter implements ProviderAdapter {
     this.failures = 0;
   }
 
+  /**
+   * Pass diagnostics through from the wrapped adapter. When the provider is
+   * tripped or reports nothing, synthesize a diagnostics record so the UI can
+   * still explain what happened instead of showing a blank details panel.
+   */
+  getDiagnostics(): AdapterDiagnostics | null {
+    let inner: AdapterDiagnostics | null = null;
+    try {
+      inner = this.inner.getDiagnostics?.() ?? null;
+    } catch (e) {
+      this.logger.warn(`[provider:${this.id}] getDiagnostics() threw`, e);
+    }
+    if (this.tripped) {
+      const d = inner ?? emptyDiagnostics(this.id, this.label);
+      return {
+        ...d,
+        notes: [
+          `The ${this.label} page reader was disabled after ${this.failures} consecutive failures. Other providers are unaffected. Reload the tab to re-enable it.`,
+          ...d.notes,
+        ],
+      };
+    }
+    return inner;
+  }
+
+
   matches(url: string): boolean {
     try {
       return this.inner.matches(url);
