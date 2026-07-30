@@ -1,5 +1,7 @@
 import type { CapturedConversation, ConversationTurn } from "@/core/tokens";
 import type { Result } from "@/core/result";
+import type { AdapterDiagnostics } from "@/services/capture/AdapterDiagnostics";
+
 
 /**
  * ProviderAdapter — stable contract for AI-site adapters.
